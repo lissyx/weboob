@@ -18,16 +18,14 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-import re
 from weboob.tools.mech import ClientForm
 from logging import error
 
 from weboob.tools.browser import BasePage, BrowserIncorrectPassword
 from weboob.tools.captcha.virtkeyboard import VirtKeyboard, VirtKeyboardError
-import tempfile
 
 
-__all__ = ['LoginPage', 'LoginPage2', 'ConfirmPage', 'ChangePasswordPage']
+__all__ = ['LoginPage', 'INGVirtKeyboard', 'StopPage']
 
 
 class INGVirtKeyboard(VirtKeyboard):
@@ -46,6 +44,8 @@ class INGVirtKeyboard(VirtKeyboard):
 
     def __init__(self, basepage):
         divkeyboard = basepage.document.find("//div[@id='clavierdisplayLogin']")
+        if divkeyboard is None:
+            divkeyboard = basepage.document.find("//div[@id='claviertransfer']")
         try:
             img = divkeyboard.xpath("img")[1]
         except:
@@ -65,9 +65,6 @@ class INGVirtKeyboard(VirtKeyboard):
 
         VirtKeyboard.__init__(self, basepage.browser.openurl(url), coords, self.color)
 
-        if basepage.browser.responses_dirname is None:
-            basepage.browser.responses_dirname = \
-                    tempfile.mkdtemp(prefix='weboob_session_')
         self.check_symbols(self.symbols, basepage.browser.responses_dirname)
 
     def get_string_code(self, string):
@@ -95,27 +92,22 @@ class LoginPage(BasePage):
         # First step : login and birthday
         self.browser.select_form('zone1Form')
         self.browser.set_all_readonly(False)
-        self.browser['zone1Form:numClient'] = login
-        self.browser['zone1Form:dateDay'] = birthday[0:2]
-        self.browser['zone1Form:dateMonth'] = birthday[2:4]
-        self.browser['zone1Form:dateYear'] = birthday[4:9]
-        self.browser['zone1Form:radioSaveClientNumber'] = False
+        self.browser['zone1Form:numClient'] = str(login)
+        self.browser['zone1Form:dateDay'] = str(birthday[0:2])
+        self.browser['zone1Form:dateMonth'] = str(birthday[2:4])
+        self.browser['zone1Form:dateYear'] = str(birthday[4:9])
+        self.browser['zone1Form:idRememberMyCifCheck'] = False
         self.browser.submit(nologin=True)
 
     def error(self):
-        error = self.document.find('//span[@class="error"]')
-        return error is not None
-        
-
-class LoginPage2(BasePage):
-    def on_loaded(self):
-        pass
+        err = self.document.find('//span[@class="error"]')
+        return err is not None
 
     def login(self, password):
         # 2) And now, the virtual Keyboard
         try:
             vk = INGVirtKeyboard(self)
-        except VirtKeyboardError, err:
+        except VirtKeyboardError as err:
             error("Error: %s" % err)
             return False
         realpasswd = ""
@@ -137,25 +129,6 @@ class LoginPage2(BasePage):
         self.browser.submit(nologin=True)
 
 
-class ConfirmPage(BasePage):
-    def get_error(self):
-        for td in self.document.xpath('//td[@class="hdvon1"]'):
-            if td.text:
-                return td.text.strip()
-        return None
-
-    def get_relocate_url(self):
-        script = self.document.xpath('//script')[0]
-        m = re.match('document.location.replace\("(.*)"\)', script.text[script.text.find('document.location.replace'):])
-        if m:
-            return m.group(1)
-
-
-class MessagePage(BasePage):
+class StopPage(BasePage):
     def on_loaded(self):
-        pass
-
-
-class ChangePasswordPage(BasePage):
-    def on_loaded(self):
-        pass
+        raise BrowserIncorrectPassword('Please login on website to fill the form and retry')

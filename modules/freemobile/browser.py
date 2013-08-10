@@ -27,15 +27,14 @@ __all__ = ['Freemobile']
 class Freemobile(BaseBrowser):
     DOMAIN = 'mobile.free.fr'
     PROTOCOL = 'https'
+    CERTHASH = 'c35987d4cff8c16cc1548704e7eabb80e6d509e5f26c408ae6775a4350d2e68f'
     ENCODING = None  # refer to the HTML encoding
     PAGES = {'.*moncompte/index.php': LoginPage,
              '.*page=home':           HomePage,
              '.*page=suiviconso':     DetailsPage,
              '.*page=consotel_current_month': HistoryPage
             }
-
-    def __init__(self, *args, **kwargs):
-        BaseBrowser.__init__(self, *args, **kwargs)
+    #DEBUG_HTTP = True
 
     def home(self):
         self.location('https://mobile.free.fr/moncompte/index.php')
@@ -60,7 +59,11 @@ class Freemobile(BaseBrowser):
         if not self.is_on_page(HomePage):
             self.location('/moncompte/index.php?page=home')
 
-        return self.page.get_list()
+        subscriptions = self.page.get_list()
+        self.location('/moncompte/index.php?page=suiviconso')
+        for subscription in subscriptions:
+            subscription.renewdate = self.page.get_renew_date(subscription)
+            yield subscription
 
     def get_subscription(self, id):
         assert isinstance(id, basestring)
@@ -68,40 +71,39 @@ class Freemobile(BaseBrowser):
         if not self.is_on_page(HomePage):
             self.location('/moncompte/index.php?page=home')
 
-        l = self.page.get_list()
-        for a in l:
+        for a in self.get_subscription_list():
             if a.id == id:
                 return a
 
         return None
 
-    def get_history(self):
+    def get_history(self, subscription):
         if not self.is_on_page(HistoryPage):
-            self.location('/moncompte/ajax.php?page=consotel_current_month', 'login=' + self.username)
-        return self.page.get_calls()
+            self.location('/moncompte/ajax.php?page=consotel_current_month', 'login=' + subscription._login)
+        num = 0
+        for call in self.page.get_calls():
+            call.id = subscription.id + "-%s" % num
+            num += 1
+            yield call
 
-    def get_details(self):
+    def get_details(self, subscription):
         if not self.is_on_page(DetailsPage):
             self.location('/moncompte/index.php?page=suiviconso')
-        return self.page.get_details()
+        return self.page.get_details(subscription)
 
-    def iter_bills(self, parentid):
+    def iter_bills(self, subscription):
         if not self.is_on_page(DetailsPage):
             self.location('/moncompte/index.php?page=suiviconso')
-        return self.page.date_bills()
+        return self.page.date_bills(subscription)
 
     def get_bill(self, id):
         assert isinstance(id, basestring)
+        subid = id.split('.')[0]
+        sub = self.get_subscription(subid)
 
         if not self.is_on_page(DetailsPage):
             self.location('/moncompte/index.php?page=suiviconso')
-        l = self.page.date_bills()
+        l = self.page.date_bills(sub)
         for a in l:
             if a.id == id:
                 return a
-
-    def download_bill(self, id):
-        assert isinstance(id, basestring)
-        date = id.split('.')[1]
-
-        return self.readurl('/moncompte/ajax.php?page=facture&mode=html&date=' + date)

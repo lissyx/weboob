@@ -23,11 +23,13 @@ from weboob.tools.application.qt import QtApplication
 
 from .main_window import MainWindow
 
+
 class QVideoob(QtApplication):
     APPNAME = 'qvideoob'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2011 Romain Bignon'
-    DESCRIPTION = 'Qt application allowing to search videos on various websites and play them.'
+    DESCRIPTION = "Qt application allowing to search videos on various websites and play them."
+    SHORT_DESCRIPTION = "search and play videos"
     CAPS = ICapVideo
     CONFIG = {'settings': {'nsfw': 1,
                            'sfw': 1,
@@ -35,10 +37,11 @@ class QVideoob(QtApplication):
                            'backend': ''
                           }
              }
+
     def main(self, argv):
         self.load_backends(ICapVideo)
         self.load_config()
 
-        self.main_window = MainWindow(self.config, self.weboob)
+        self.main_window = MainWindow(self.config, self.weboob, self)
         self.main_window.show()
         return self.weboob.loop()

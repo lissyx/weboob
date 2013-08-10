@@ -29,9 +29,9 @@ __all__ = ['GoogleTranslateBackend']
 
 
 class GoogleTranslateBackend(BaseBackend, ICapTranslate):
-    MAINTAINER = 'Lucien Loiseau'
+    MAINTAINER = u'Lucien Loiseau'
     EMAIL = 'loiseau.lucien@gmail.com'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     NAME = 'googletranslate'
     DESCRIPTION = u'Google translation web service'
@@ -47,7 +47,6 @@ class GoogleTranslateBackend(BaseBackend, ICapTranslate):
         'Serbian':'sr', 'Slovak':'sk', 'Slovenian':'sl', 'Spanish':'es', 'Swahili':'sw', 'Swedish':'sv', 'Tamil':'ta',
         'Telugu':'te', 'Thai':'th', 'Turkish':'tr', 'Ukrainian':'uk', 'Urdu':'ur', 'Vietnamese':'vi', 'Welsh':'cy', 'Yiddish':'yi',
         }
-
 
     def translate(self, lan_from, lan_to, text):
         if not lan_from in self.GOOGLELANGUAGE.keys():

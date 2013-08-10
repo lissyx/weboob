@@ -20,7 +20,7 @@
 
 try:
     import sqlite3 as sqlite
-except ImportError, e:
+except ImportError as e:
     from pysqlite2 import dbapi2 as sqlite
 
 from mechanize import CookieJar, Cookie
@@ -39,7 +39,7 @@ class FirefoxCookieJar(CookieJar):
     def __connect(self):
         try:
             db = sqlite.connect(database=self.sqlite_file, timeout=10.0)
-        except sqlite.OperationalError, err:
+        except sqlite.OperationalError as err:
             print 'Unable to open %s database: %s' % (self.sqlite_file, err)
             return None
 
@@ -47,7 +47,8 @@ class FirefoxCookieJar(CookieJar):
 
     def load(self):
         db = self.__connect()
-        if not db: return
+        if not db:
+            return
 
         cookies = db.execute("""SELECT host, path, name, value, expiry, lastAccessed, isSecure
                                 FROM moz_cookies
@@ -83,12 +84,15 @@ class FirefoxCookieJar(CookieJar):
 
     def save(self):
         db = self.__connect()
-        if not db: return
+        if not db:
+            return
 
         db.execute("DELETE FROM moz_cookies WHERE host LIKE '%%%s%%'" % self.domain)
         for cookie in self:
-            if cookie.secure: secure = 1
-            else: secure = 0
+            if cookie.secure:
+                secure = 1
+            else:
+                secure = 0
             if cookie.expires is not None:
                 expires = cookie.expires
             else:

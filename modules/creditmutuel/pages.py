@@ -18,79 +18,127 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
+import urllib
 from urlparse import urlparse, parse_qs
 from decimal import Decimal
 import re
 
-from weboob.tools.browser import BasePage
+from weboob.tools.browser import BasePage, BrowserIncorrectPassword, BrokenPageError
+from weboob.tools.ordereddict import OrderedDict
 from weboob.capabilities.bank import Account
 from weboob.tools.capabilities.bank.transactions import FrenchTransaction
+
 
 class LoginPage(BasePage):
     def login(self, login, passwd):
         self.browser.select_form(nr=0)
-        self.browser['_cm_user'] = login
-        self.browser['_cm_pwd'] = passwd
+        self.browser['_cm_user'] = login.encode(self.browser.ENCODING)
+        self.browser['_cm_pwd'] = passwd.encode(self.browser.ENCODING)
         self.browser.submit(nologin=True)
+
 
 class LoginErrorPage(BasePage):
     pass
 
+
+class ChangePasswordPage(BasePage):
+    def on_loaded(self):
+        raise BrowserIncorrectPassword('Please change your password')
+
+class VerifCodePage(BasePage):
+    def on_loaded(self):
+        raise BrowserIncorrectPassword('Unable to login: website asks a code from a card')
+
 class InfoPage(BasePage):
     pass
+
+
+class EmptyPage(BasePage):
+    pass
+
 
 class TransfertPage(BasePage):
     pass
 
+
 class UserSpacePage(BasePage):
     pass
 
+
 class AccountsPage(BasePage):
     def get_list(self):
-        ids = set()
+        accounts = OrderedDict()
 
         for tr in self.document.getiterator('tr'):
             first_td = tr.getchildren()[0]
             if (first_td.attrib.get('class', '') == 'i g' or first_td.attrib.get('class', '') == 'p g') \
                and first_td.find('a') is not None:
-                account = Account()
-                account.label = u"%s"%first_td.find('a').text.strip().lstrip(' 0123456789').title()
-                account._link_id = first_td.find('a').get('href', '')
-                if account._link_id.startswith('POR_SyntheseLst'):
+
+                a = first_td.find('a')
+                link = a.get('href', '')
+                if link.startswith('POR_SyntheseLst'):
                     continue
 
-                url = urlparse(account._link_id)
+                url = urlparse(link)
                 p = parse_qs(url.query)
                 if not 'rib' in p:
                     continue
 
-                account.id = p['rib'][0]
+                for i in (2,1):
+                    balance = FrenchTransaction.clean_amount(tr.getchildren()[i].text)
+                    currency = Account.get_currency(tr.getchildren()[i].text)
+                    if len(balance) > 0:
+                        break
+                balance = Decimal(balance)
 
-                if account.id in ids:
+                id = p['rib'][0]
+                if id in accounts:
+                    account = accounts[id]
+                    if not account.coming:
+                        account.coming = Decimal('0.0')
+                    account.coming += balance
+                    account._card_links.append(link)
                     continue
 
-                ids.add(account.id)
+                account = Account()
+                account.id = id
+                account.label = unicode(a.text).strip().lstrip(' 0123456789').title()
+                account._link_id = link
+                account._card_links = []
 
-                s = tr.getchildren()[2].text
-                if s.strip() == "":
-                    s = tr.getchildren()[1].text
-                balance = u''
-                for c in s:
-                    if c.isdigit() or c == '-':
-                        balance += c
-                    if c == ',':
-                        balance += '.'
-                account.balance = Decimal(balance)
-                yield account
+                # Find accounting amount
+                page = self.browser.get_document(self.browser.openurl(link))
+                coming = self.find_amount(page, u"Opérations à venir")
+                accounting = self.find_amount(page, u"Solde comptable")
 
-    def next_page_url(self):
-        """ TODO pouvoir passer à la page des comptes suivante """
-        return 0
+                if accounting is not None and accounting + (coming or Decimal('0')) != balance:
+                    self.logger.warning('%s + %s != %s' % (accounting, coming, balance))
+
+                if accounting is not None:
+                    balance = accounting
+
+                if coming is not None:
+                    account.coming = coming
+                account.balance = balance
+                account.currency = currency
+
+                accounts[account.id] = account
+
+        return accounts.itervalues()
+
+    def find_amount(self, page, title):
+        try:
+            td = page.xpath(u'//th[contains(text(), "%s")]/../td' % title)[0]
+        except IndexError:
+            return None
+        else:
+            return Decimal(FrenchTransaction.clean_amount(td.text))
+
 
 class Transaction(FrenchTransaction):
     PATTERNS = [(re.compile('^VIR(EMENT)? (?P<text>.*)'), FrenchTransaction.TYPE_TRANSFER),
                 (re.compile('^PRLV (?P<text>.*)'),        FrenchTransaction.TYPE_ORDER),
-                (re.compile('^(?P<text>.*) CARTE \d+ PAIEMENT CB (?P<dd>\d{2})(?P<mm>\d{2}) ?(.*)$'),
+                (re.compile('^(?P<text>.*) CARTE \d+ PAIEMENT CB\s+(?P<dd>\d{2})(?P<mm>\d{2}) ?(.*)$'),
                                                           FrenchTransaction.TYPE_CARD),
                 (re.compile('^RETRAIT DAB (?P<dd>\d{2})(?P<mm>\d{2}) (?P<text>.*) CARTE \d+'),
                                                           FrenchTransaction.TYPE_WITHDRAWAL),
@@ -98,6 +146,8 @@ class Transaction(FrenchTransaction):
                 (re.compile('^COTIS\.? (?P<text>.*)'),    FrenchTransaction.TYPE_BANK),
                 (re.compile('^REMISE (?P<text>.*)'),      FrenchTransaction.TYPE_DEPOSIT),
                ]
+
+    _is_coming = False
 
 
 class OperationsPage(BasePage):
@@ -120,41 +170,102 @@ class OperationsPage(BasePage):
                 operation = Transaction(index)
                 index += 1
 
-                # Find different parts of label
-                parts = []
-                if len(tds[-3].findall('a')) > 0:
-                    parts = [a.text.strip() for a in tds[-3].findall('a')]
-                else:
-                    parts.append(tds[-3].text.strip())
-                    if tds[-3].find('br') is not None:
-                        parts.append(tds[-3].find('br').tail.strip())
+                parts = [txt.strip() for txt in tds[-3].itertext() if len(txt.strip()) > 0]
 
                 # To simplify categorization of CB, reverse order of parts to separate
                 # location and institution.
                 if parts[0].startswith('PAIEMENT CB'):
                     parts.reverse()
 
-                operation.parse(date=tds[0].text,
-                                raw=u' '.join(parts))
+                date = tds[0].text
+                vdate = tds[1].text if len(tds) >= 5 else None
+                raw = u' '.join(parts)
 
-                if tds[-1].text is not None and len(tds[-1].text) > 2:
-                    s = tds[-1].text.strip()
-                elif tds[-1].text is not None and len(tds[-2].text) > 2:
-                    s = tds[-2].text.strip()
-                else:
-                    s = "0"
-                balance = u''
-                for c in s:
-                    if c.isdigit() or c == "-":
-                        balance += c
-                    if c == ',':
-                        balance += '.'
-                operation.amount = Decimal(balance)
+                operation.parse(date=date, vdate=vdate, raw=raw)
+
+                credit = self.parser.tocleanstring(tds[-1])
+                debit = self.parser.tocleanstring(tds[-2])
+                operation.set_amount(credit, debit)
                 yield operation
 
-    def next_page_url(self):
-        """ TODO pouvoir passer à la page des opérations suivantes """
-        return 0
+    def go_next(self):
+        form = self.document.xpath('//form[@id="paginationForm"]')
+        if len(form) == 0:
+            return False
+
+        form = form[0]
+
+        text = self.parser.tocleanstring(form)
+        m = re.search(u'(\d+) / (\d+)', text or '', flags=re.MULTILINE)
+        if not m:
+            return False
+
+        cur = int(m.group(1))
+        last = int(m.group(2))
+
+        if cur == last:
+            return False
+
+        inputs = {}
+        for elm in form.xpath('.//input[@type="input"]'):
+            key = elm.attrib['name']
+            value = elm.attrib['value']
+            inputs[key] = value
+
+        inputs['page'] = str(cur + 1)
+
+        self.browser.location(form.attrib['action'], urllib.urlencode(inputs))
+
+        return True
+
+    def get_coming_link(self):
+        try:
+            a = self.parser.select(self.document, u'//a[contains(text(), "Opérations à venir")]', 1, 'xpath')
+        except BrokenPageError:
+            return None
+        else:
+            return a.attrib['href']
+
+
+class ComingPage(OperationsPage):
+    def get_history(self):
+        index = 0
+        for tr in self.document.xpath('//table[@class="liste"]/tbody/tr'):
+            tds = tr.findall('td')
+            if len(tds) < 3:
+                continue
+
+            tr = Transaction(index)
+
+            date = self.parser.tocleanstring(tds[0])
+            raw = self.parser.tocleanstring(tds[1])
+            amount = self.parser.tocleanstring(tds[-1])
+
+            tr.parse(date=date, raw=raw)
+            tr.set_amount(amount)
+            tr._is_coming = True
+            yield tr
+
+
+class CardPage(OperationsPage):
+    def get_history(self):
+        index = 0
+        for tr in self.document.xpath('//table[@class="liste"]/tbody/tr'):
+            tds = tr.findall('td')[:4]
+            if len(tds) < 4:
+                continue
+
+            tr = Transaction(index)
+
+            parts = [txt.strip() for txt in list(tds[-3].itertext()) + list(tds[-2].itertext()) if len(txt.strip()) > 0]
+
+            tr.parse(date=tds[0].text.strip(' \xa0'),
+                     raw=u' '.join(parts))
+            tr.type = tr.TYPE_CARD
+
+            tr.set_amount(tds[-1].text)
+            yield tr
+
 
 class NoOperationsPage(OperationsPage):
     def get_history(self):

@@ -18,10 +18,10 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from dateutil.parser import parse as parse_dt
+from datetime import datetime
 import re
 
-from weboob.tools.browser import BasePage
+from weboob.tools.browser import BasePage, BrokenPageError
 from weboob.tools.capabilities.thumbnail import Thumbnail
 from weboob.capabilities.base import NotAvailable
 
@@ -33,26 +33,29 @@ __all__ = ['IndexPage']
 
 class IndexPage(BasePage):
     def iter_videos(self):
-        div_list = self.parser.select(self.document.getroot(), 'div.ligne_video')
-        for div in div_list:
-            m = re.match('index.php\?id=(\d+)', div.find('a').attrib['href'])
+        for div in self.parser.select(self.document.getroot(), 'div.data_emissions ul li'):
+            m = re.match('id-(\d+)', div.attrib.get('class', ''))
             if not m:
                 continue
+
+            img = self.parser.select(div, 'div.screenshot a img', 1)
+
             video = NolifeTVVideo(m.group(1))
-            video.title = self.parser.select(div, 'span.span_title', 1).text
-            video.description = self.parser.select(div, 'span.span_description', 1).text
-            video.thumbnail = Thumbnail(self.parser.select(div, 'div.screen_video', 1).find('img').attrib['src'])
+            video.title = unicode(img.attrib['alt'])
             try:
-                video.date = parse_dt(self.parser.select(div, 'div.infos_video span.span_title', 1).text.strip())
-            except Exception:
+                video.description = unicode(self.parser.select(div, 'div.tooltip div.border-bottom p, div.infos div.border-bottom p')[-1].text)
+            except IndexError:
+                video.description = NotAvailable
+
+            video.thumbnail = Thumbnail(unicode(img.attrib['src']))
+            try:
+                dparts = self.parser.select(div, 'span.date_emission', 1).text.strip().split('/')
+                hparts = self.parser.select(div, 'span.hour_emission', 1).text.strip().split('h')
+                video.date = datetime(int(dparts[-1]), int(dparts[-2]), int(dparts[-3]),
+                                      int(hparts[0]), int(hparts[1]))
+            except (BrokenPageError,ValueError):
                 video.date = NotAvailable
 
-            rating_url = self.parser.select(div, 'span.description img')[0].attrib['src']
-            m = re.match('.*view_level(\d+)\.gif', rating_url)
-            if m:
-                video.rating = int(m.group(1))
-                video.rating_max = 21
-            else:
-                video.rating = video.rating_max = NotAvailable
+            video.set_empty_fields(NotAvailable, ('url',))
 
             yield video

@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from .base import CapBaseObject, StringField, DateField, DecimalField, UserError
+from .base import CapBaseObject, StringField, DateField, DecimalField, IntField, UserError, Currency
 from .collection import ICapCollection
 
 
@@ -48,22 +48,33 @@ class Detail(CapBaseObject):
     label =     StringField('label of the detail line')
     infos =     StringField('information')
     datetime =  DateField('date information')
-    price =     DecimalField('price')
+    price =     DecimalField('Total price, taxes included')
+    vat =       DecimalField('Value added Tax')
+    currency =  IntField('Currency', default=Currency.CUR_UNKNOWN)
+    quantity =  DecimalField('Number of units consumed')
+    unit =      StringField('Unit of the consumption')
 
     def __init__(self):
         CapBaseObject.__init__(self, 0)
+
 
 class Bill(CapBaseObject):
     """
     Bill.
     """
-    date =      DateField('date of the bill')
-    format =    StringField('format of the bill')
-    label =     StringField('label of bill')
-    idparent =  StringField('id of the parent subscription')
+    date =          DateField('The day the bill has been sent to the subscriber')
+    format =        StringField('file format of the bill')
+    label =         StringField('label of bill')
+    idparent =      StringField('id of the parent subscription')
+    price =         DecimalField('Price to pay')
+    currency =      IntField('Currency', default=Currency.CUR_UNKNOWN)
+    deadline =      DateField('The latest day to pay')
+    startdate =     DateField('The first day the bill applies to')
+    finishdate =    DateField('The last day the bill applies to')
 
     def __init__(self):
         CapBaseObject.__init__(self, 0)
+
 
 class Subscription(CapBaseObject):
     """
@@ -71,6 +82,9 @@ class Subscription(CapBaseObject):
     """
     label =         StringField('label of subscription')
     subscriber =    StringField('whe has subscribed')
+    validity =      DateField('End validity date of the subscription')
+    renewdate =     DateField('Reset date of consumption')
+
 
 class ICapBill(ICapCollection):
     def iter_resources(self, objs, split_path):
@@ -99,7 +113,7 @@ class ICapBill(ICapCollection):
         """
         raise NotImplementedError()
 
-    def iter_history(self, subscription):
+    def iter_bills_history(self, subscription):
         """
         Iter history of a subscription.
 
@@ -143,8 +157,18 @@ class ICapBill(ICapCollection):
         """
         Get details of a subscription.
 
-        :param subscription: subscription to get bills
+        :param subscription: subscription to get details
         :type subscription: :class:`Subscription`
         :rtype: iter[:class:`Detail`]
+        """
+        raise NotImplementedError()
+
+    def get_balance(self, subscription):
+        """
+        Get the balance of a subscription.
+
+        :param subscription: subscription to get balance
+        :type subscription: :class:`Subscription`
+        :rtype :class:`Detail`
         """
         raise NotImplementedError()

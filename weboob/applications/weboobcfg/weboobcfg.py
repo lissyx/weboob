@@ -21,7 +21,6 @@
 import os
 import sys
 import re
-from copy import copy
 
 from weboob.capabilities.account import ICapAccount
 from weboob.core.modules import ModuleLoadError
@@ -34,17 +33,15 @@ __all__ = ['WeboobCfg']
 
 class WeboobCfg(ReplApplication):
     APPNAME = 'weboob-config'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2012 Christophe Benz, Romain Bignon'
     DESCRIPTION = "Weboob-Config is a console application to add/edit/remove backends, " \
                   "and to register new website accounts."
+    SHORT_DESCRIPTION = "manage backends or register new accounts"
     COMMANDS_FORMATTERS = {'modules':     'table',
                            'list':        'table',
                            }
     DISABLE_REPL = True
-
-    weboob_commands = copy(ReplApplication.weboob_commands)
-    weboob_commands.remove('backends')
 
     def load_default_backends(self):
         pass
@@ -121,18 +118,22 @@ class WeboobCfg(ReplApplication):
         """
         caps = line.split()
         for instance_name, name, params in sorted(self.weboob.backends_config.iter_backends()):
-            module = self.weboob.modules_loader.get_or_load_module(name)
+            try:
+                module = self.weboob.modules_loader.get_or_load_module(name)
+            except ModuleLoadError as e:
+                self.logger.warning('Unable to load module %r: %s' % (name, e))
+                continue
+
             if caps and not module.has_caps(*caps):
                 continue
             row = OrderedDict([('Name', instance_name),
                                ('Module', name),
                                ('Configuration', ', '.join(
-                                   '%s=%s' % (key, ('*****' if key in module.config and module.config[key].masked \
-                                                    else value)) \
+                                   '%s=%s' % (key, ('*****' if key in module.config and module.config[key].masked
+                                                    else value))
                                    for key, value in params.iteritems())),
                                ])
             self.format(row)
-        self.flush()
 
     def do_remove(self, instance_name):
         """
@@ -143,7 +144,6 @@ class WeboobCfg(ReplApplication):
         if not self.weboob.backends_config.remove_backend(instance_name):
             print >>sys.stderr, 'Backend instance "%s" does not exist' % instance_name
             return 1
-
 
     def _do_toggle(self, name, state):
         try:
@@ -194,7 +194,6 @@ class WeboobCfg(ReplApplication):
                                ('Description', info.description),
                                ])
             self.format(row)
-        self.flush()
 
     def do_info(self, line):
         """

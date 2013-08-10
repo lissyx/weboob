@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright(C) 2010-2011 Romain Bignon
+# Copyright(C) 2010-2013 Romain Bignon
 #
 # This file is part of weboob.
 #
@@ -18,9 +18,6 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
-
-from dateutil import tz
 from logging import warning
 from time import time, sleep
 from tempfile import gettempdir
@@ -28,6 +25,8 @@ import os
 import sys
 import traceback
 import types
+# keep compatibility
+from .date import local2utc, utc2local
 
 
 __all__ = ['get_backtrace', 'get_bytes_size', 'html2text', 'iter_fields',
@@ -65,6 +64,8 @@ try:
     import html2text as h2t
     h2t.UNICODE_SNOB = 1
     h2t.SKIP_INTERNAL_LINKS = True
+    h2t.INLINE_LINKS = False
+    h2t.LINKS_EACH_PARAGRAPH = True
     html2text = h2t.html2text
 except ImportError:
     warning('python-html2text is not present. HTML pages will not be converted into text.')
@@ -80,12 +81,6 @@ def iter_fields(obj):
         attribute = getattr(obj, attribute_name)
         if not isinstance(attribute, types.MethodType):
             yield attribute_name, attribute
-
-
-def local2utc(date):
-    date = date.replace(tzinfo=tz.tzlocal())
-    date = date.astimezone(tz.tzutc())
-    return date
 
 
 def to_unicode(text):
@@ -111,12 +106,6 @@ def to_unicode(text):
             return unicode(text, 'iso-8859-15')
         except UnicodeError:
             return unicode(text, 'windows-1252', 'replace')
-
-
-def utc2local(date):
-    date = date.replace(tzinfo=tz.tzutc())
-    date = date.astimezone(tz.tzlocal())
-    return date
 
 
 def limit(iterator, lim):

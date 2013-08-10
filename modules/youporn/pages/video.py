@@ -52,16 +52,16 @@ class VideoPage(PornPage):
         if m:
             ext = m.group(1).lower()
         else:
-            ext = 'flv'
+            ext = u'flv'
         return unicode(a.attrib['href']), unicode(ext)
 
     def get_title(self):
-        element = self.parser.select(self.document.getroot(), '#videoCanvas h1', 1)
+        element = self.parser.select(self.document.getroot(), 'h1', 1)
         return element.text.strip().decode('utf-8')
 
     def set_details(self, v):
         for li in self.parser.select(self.document.getroot(), 'ul.spaced li'):
-            span = li.find('b')
+            span = li.find('label')
             name = span.text.strip()
             value = span.tail.strip()
 
@@ -84,8 +84,8 @@ class VideoPage(PornPage):
                 else:
                     v.author = unicode(author.text)
             elif name == 'Rating:':
-                r = value.split()
-                v.rating = int(r[0].rstrip('%'))
+                value = li.find('span').text
+                v.rating = int(value.rstrip('%'))
                 v.rating_max = 100
             elif name == 'Date:':
                 v.date = parse_dt(value)

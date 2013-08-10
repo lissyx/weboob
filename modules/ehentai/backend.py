@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 import re
 from weboob.capabilities.gallery import ICapGallery, BaseGallery
@@ -35,9 +35,9 @@ __all__ = ['EHentaiBackend']
 
 class EHentaiBackend(BaseBackend, ICapGallery, ICapCollection):
     NAME = 'ehentai'
-    MAINTAINER = 'Roger Philibert'
+    MAINTAINER = u'Roger Philibert'
     EMAIL = 'roger.philibert@gmail.com'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'E-Hentai galleries'
     LICENSE = 'AGPLv3+'
     BROWSER = EHentaiBrowser
@@ -54,7 +54,7 @@ class EHentaiBackend(BaseBackend, ICapGallery, ICapCollection):
             password = None
         return self.create_browser(self.config['domain'].get(), username, password)
 
-    def search_gallery(self, pattern, sortby=None, max_results=None):
+    def search_gallery(self, pattern, sortby=None):
         with self.browser:
             return self.browser.search_gallery(pattern)
 
@@ -65,6 +65,7 @@ class EHentaiBackend(BaseBackend, ICapGallery, ICapCollection):
 
     ID_REGEXP = r'/?\d+/[\dabcdef]+/?'
     URL_REGEXP = r'.+/g/(%s)' % ID_REGEXP
+
     def get_gallery(self, _id):
         match = re.match(r'^%s$' % self.URL_REGEXP, _id)
         if match:

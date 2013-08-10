@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from weboob.tools.browser import BaseBrowser
+from weboob.tools.browser import BaseBrowser, BrowserHTTPNotFound
 
 from .pages import TorrentsPage, TorrentPage
 
@@ -27,24 +27,24 @@ __all__ = ['KickassBrowser']
 
 
 class KickassBrowser(BaseBrowser):
-    DOMAIN = 'kat.ph'
-    PROTOCOL = 'http'
+    DOMAIN = 'kickass.to'
+    PROTOCOL = 'https'
     ENCODING = 'utf-8'
     USER_AGENT = BaseBrowser.USER_AGENTS['wget']
     PAGES = {
-        'http://kat.ph/usearch/.*field=seeders&sorder=desc': TorrentsPage,
-        'http://kat.ph/.*.html': TorrentPage,
-        }
-
-    def home(self):
-        return self.location('http://kat.ph')
+        'https://kickass.to/usearch/.*field=seeders&sorder=desc': TorrentsPage,
+        'https://kickass.to/.*.html': TorrentPage,
+    }
 
     def iter_torrents(self, pattern):
-        self.location('http://kat.ph/usearch/%s/?field=seeders&sorder=desc' % pattern.encode('utf-8'))
+        self.location('https://kickass.to/usearch/%s/?field=seeders&sorder=desc' % pattern.encode('utf-8'))
         assert self.is_on_page(TorrentsPage)
         return self.page.iter_torrents()
 
     def get_torrent(self, id):
-        self.location('http://kat.ph/%s.html' % id)
-        assert self.is_on_page(TorrentPage)
-        return self.page.get_torrent(id)
+        try:
+            self.location('https://kickass.to/%s.html' % id)
+        except BrowserHTTPNotFound:
+            return
+        if self.is_on_page(TorrentPage):
+            return self.page.get_torrent(id)

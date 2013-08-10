@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.tools.capabilities.paste import BasePasteBackend
 from weboob.tools.backend import BaseBackend, BackendConfig
@@ -34,9 +34,9 @@ __all__ = ['PastebinBackend']
 
 class PastebinBackend(BaseBackend, BasePasteBackend):
     NAME = 'pastebin'
-    MAINTAINER = 'Laurent Bachelier'
+    MAINTAINER = u'Laurent Bachelier'
     EMAIL = 'laurent@bachelier.name'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'Pastebin text sharing service'
     LICENSE = 'AGPLv3+'
     BROWSER = PastebinBrowser

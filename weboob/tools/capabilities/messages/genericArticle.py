@@ -48,6 +48,19 @@ def drop_comments(base_element):
     for comment in base_element.getiterator(Comment):
         comment.drop_tree()
 
+# Replace relative url in link and image with a complete url
+# Arguments: the html element to clean, and the domain name (with http:// prefix)
+
+
+def clean_relativ_urls(base_element, domain):
+    for a in base_element.findall('.//a'):
+        if "href" in a.attrib:
+            if a.attrib["href"] and a.attrib["href"][0:7] != "http://" and a.attrib["href"][0:7] != "https://":
+                a.attrib["href"] = domain + a.attrib["href"]
+    for img in base_element.findall('.//img'):
+        if img.attrib["src"][0:7] != "http://" and img.attrib["src"][0:7] != "https://":
+            img.attrib["src"] = domain + img.attrib["src"]
+
 
 class NoAuthorElement(BrokenPageError):
     pass
@@ -102,7 +115,7 @@ class GenericNewsPage(BasePage):
                 self.element_title_selector,
                 1).text_content().strip()
         except AttributeError:
-            if self.main_div == None:
+            if self.main_div is None:
                 #TODO: Mettre un warning
                 return self.__article.title
             else:
@@ -119,7 +132,7 @@ class GenericNewsPage(BasePage):
         except BrokenPageError:
             raise NoBodyElement("no body on %s" % (self.browser))
         except AttributeError:
-            if self.main_div == None:
+            if self.main_div is None:
                 raise NoneMainDiv("main_div is none on %s" % (self.browser))
             else:
                 raise
@@ -130,7 +143,7 @@ class GenericNewsPage(BasePage):
         except BrokenPageError:
             raise NoAuthorElement()
         except AttributeError:
-            if self.main_div == None:
+            if self.main_div is None:
                 raise NoneMainDiv("main_div is none on %s" % (self.browser))
             else:
                 raise

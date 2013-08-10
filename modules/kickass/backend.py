@@ -17,27 +17,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from weboob.capabilities.torrent import ICapTorrent
+from weboob.capabilities.torrent import ICapTorrent, Torrent
 from weboob.tools.backend import BaseBackend
 
 from .browser import KickassBrowser
 
 from urllib import quote_plus
+from contextlib import closing
+from gzip import GzipFile
 
 __all__ = ['KickassBackend']
 
 
 class KickassBackend(BaseBackend, ICapTorrent):
     NAME = 'kickass'
-    MAINTAINER = 'Julien Veyssier'
+    MAINTAINER = u'Julien Veyssier'
     EMAIL = 'julien.veyssier@aiur.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'Kickass Torrents BitTorrent tracker'
     LICENSE = 'AGPLv3+'
     BROWSER = KickassBrowser
-
-    def create_default_browser(self):
-        return self.create_browser()
 
     def get_torrent(self, id):
         return self.browser.get_torrent(id)
@@ -47,7 +46,28 @@ class KickassBackend(BaseBackend, ICapTorrent):
         if not torrent:
             return None
 
-        return self.browser.openurl(torrent.url.encode('utf-8')).read()
+        # decode gzip if needed
+        response = self.browser.openurl(torrent.url.encode('utf-8'))
+        headers = response.info()
+        if headers.get('Content-Encoding', '') == 'gzip':
+            with closing(GzipFile(fileobj=response, mode='rb')) as gz:
+                data = gz.read()
+        else:
+            data = response.read()
+        return data
 
     def iter_torrents(self, pattern):
         return self.browser.iter_torrents(quote_plus(pattern.encode('utf-8')))
+
+    def fill_torrent(self, torrent, fields):
+        if 'description' in fields or 'files' in fields:
+            tor = self.get_torrent(torrent.id)
+            torrent.description = tor.description
+            torrent.magnet = tor.magnet
+            torrent.files = tor.files
+            torrent.url = tor.url
+        return torrent
+
+    OBJECTS = {
+        Torrent: fill_torrent
+    }

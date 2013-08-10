@@ -43,9 +43,9 @@ class IndexPage(BasePage):
                 continue
 
             video = DailymotionVideo(_id)
-            video.title = self.parser.select(div, 'h3 a', 1).text
-            video.author = self.parser.select(div, 'div.dmpi_user_login', 1).find('a').find('span').text.strip()
-            video.description = html2text(self.parser.tostring(self.parser.select(div, 'div.dmpi_video_description', 1))).strip()
+            video.title = unicode(self.parser.select(div, 'h3 a', 1).text).strip()
+            video.author = unicode(self.parser.select(div, 'div.dmpi_user_login', 1).find('a').find('span').text).strip()
+            video.description = html2text(self.parser.tostring(self.parser.select(div, 'div.dmpi_video_description', 1))).strip() or unicode()
             try:
                 parts = self.parser.select(div, 'div.duration', 1).text.split(':')
             except BrokenPageError:
@@ -63,12 +63,12 @@ class IndexPage(BasePage):
                 else:
                     raise BrokenPageError('Unable to parse duration %r' % self.parser.select(div, 'div.duration', 1).text)
                 video.duration = datetime.timedelta(hours=int(hours), minutes=int(minutes), seconds=int(seconds))
-            url = self.parser.select(div, 'img.dmco_image', 1).attrib['data-src']
+            url = unicode(self.parser.select(div, 'img.dmco_image', 1).attrib['data-src'])
             # remove the useless anti-caching
             url = re.sub('\?\d+', '', url)
             # use the bigger thumbnail
             url = url.replace('jpeg_preview_medium.jpg', 'jpeg_preview_large.jpg')
-            video.thumbnail = Thumbnail(url)
+            video.thumbnail = Thumbnail(unicode(url))
 
             rating_div = self.parser.select(div, 'div.small_stars', 1)
             video.rating_max = self.get_rate(rating_div)
@@ -85,6 +85,7 @@ class IndexPage(BasePage):
             self.browser.logger.warning('Unable to parse rating: %s' % div.attrib['style'])
             return 0
 
+
 class VideoPage(BasePage):
     def get_video(self, video=None):
         if video is None:
@@ -92,22 +93,30 @@ class VideoPage(BasePage):
 
         div = self.parser.select(self.document.getroot(), 'div#content', 1)
 
-        video.title = self.parser.select(div, 'span.title', 1).text
-        video.author = self.parser.select(div, 'a.name', 1).text
+        video.title = unicode(self.parser.select(div, 'span.title', 1).text).strip()
+        video.author = unicode(self.parser.select(div, 'a.name, span.name, a[rel=author]', 1).text).strip()
         try:
-            video.description = self.parser.select(div, 'div#video_description', 1).text
+            video.description = html2text(self.parser.tostring(self.parser.select(div, 'div#video_description', 1))).strip() or unicode()
         except BrokenPageError:
             video.description = u''
         for script in self.parser.select(self.document.getroot(), 'div.dmco_html'):
-            if 'id' in script.attrib and script.attrib['id'].startswith('container_player_'):
+            # TODO support videos from anyclip, cf http://www.dailymotion.com/video/xkyjiv for example
+            if 'id' in script.attrib and script.attrib['id'].startswith('container_player_') and \
+               script.find('script') is not None:
                 text = script.find('script').text
-                mobj = re.search(r'(?i)addVariable\(\"video\"\s*,\s*\"([^\"]*)\"\)', text)
+                mobj = re.search(r'\s*var flashvars = (.*)', text)
                 if mobj is None:
-                    mobj = re.search('"sdURL":.*?"(.*?)"', urllib.unquote(text))
-                    mediaURL = mobj.group(1).replace("\\", "")
-                else:
-                    mediaURL = urllib.unquote(mobj.group(1))
-                video.url = mediaURL
+                    raise BrokenPageError('Unable to extract video url')
+                flashvars = urllib.unquote(mobj.group(1))
+                for key in ['hd1080URL', 'hd720URL', 'hqURL', 'sdURL', 'ldURL', 'video_url']:
+                    if key in flashvars:
+                        max_quality = key
+                        break
+
+                mobj = re.search(r'"' + max_quality + r'":"(.+?)"', flashvars)
+                if mobj is None:
+                    raise BrokenPageError('Unable to extract video url')
+                video.url = urllib.unquote(mobj.group(1)).replace('\\/', '/')
 
         video.set_empty_fields(NotAvailable)
 

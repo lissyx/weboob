@@ -29,15 +29,12 @@ __all__ = ['MeteofranceBackend']
 
 class MeteofranceBackend(BaseBackend, ICapWeather):
     NAME = 'meteofrance'
-    MAINTAINER = 'Cedric Defortis'
+    MAINTAINER = u'Cedric Defortis'
     EMAIL = 'cedric@aiur.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'Get forecasts from the MeteoFrance website'
     LICENSE = 'AGPLv3+'
     BROWSER = MeteofranceBrowser
-
-    def create_default_browser(self):
-        return self.create_browser()
 
     def get_current(self, city_id):
         return self.browser.get_current(city_id)

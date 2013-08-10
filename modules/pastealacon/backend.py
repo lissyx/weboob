@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 import re
 
@@ -35,9 +35,9 @@ __all__ = ['PastealaconBackend']
 
 class PastealaconBackend(BaseBackend, BasePasteBackend):
     NAME = 'pastealacon'
-    MAINTAINER = 'Laurent Bachelier'
+    MAINTAINER = u'Laurent Bachelier'
     EMAIL = 'laurent@bachelier.name'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = u'Paste à la con text sharing tool'
     LICENSE = 'AGPLv3+'
     BROWSER = PastealaconBrowser

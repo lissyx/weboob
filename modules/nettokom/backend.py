@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.bill import ICapBill, SubscriptionNotFound
 from weboob.tools.backend import BaseBackend, BackendConfig
@@ -31,9 +31,9 @@ __all__ = ['NettoKomBackend']
 
 class NettoKomBackend(BaseBackend, ICapBill):
     NAME = 'nettokom'
-    MAINTAINER = 'Florent Fourcot'
+    MAINTAINER = u'Florent Fourcot'
     EMAIL = 'weboob@flo.fourcot.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = 'Nettokom website'
     CONFIG = BackendConfig(ValueBackendPassword('login',
@@ -63,7 +63,7 @@ class NettoKomBackend(BaseBackend, ICapBill):
         else:
             raise SubscriptionNotFound()
 
-    def iter_history(self, subscription):
+    def iter_bills_history(self, subscription):
         with self.browser:
             for history in self.browser.get_history():
                 yield history

@@ -28,6 +28,7 @@ __all__ = ['InvalidMediaPlayer', 'MediaPlayer', 'MediaPlayerNotFound']
 
 
 PLAYERS = (
+    ('mplayer2', '-'),
     ('mplayer', '-'),
     ('vlc',     '-'),
     ('parole',  'fd://0'),
@@ -38,7 +39,7 @@ PLAYERS = (
 
 class MediaPlayerNotFound(Exception):
     def __init__(self):
-        Exception.__init__(self, u'No media player found on this system. Please install one of them: %s.' % \
+        Exception.__init__(self, u'No media player found on this system. Please install one of them: %s.' %
             ', '.join(player[0] for player in PLAYERS))
 
 
@@ -65,7 +66,7 @@ class MediaPlayer(object):
                 return player_name
         return None
 
-    def play(self, media, player_name=None):
+    def play(self, media, player_name=None, player_args=None):
         """
         Play a media object, using programs from the PLAYERS list.
 
@@ -73,17 +74,14 @@ class MediaPlayer(object):
         _play_rtmp for special rtmp streams using SWF verification.
         """
         player_names = [player[0] for player in PLAYERS]
-        if player_name:
-            if player_name not in player_names:
-                raise InvalidMediaPlayer(player_name)
-        else:
-            self.logger.debug(u'No media player given. Using the first available from: %s.' % \
+        if not player_name:
+            self.logger.debug(u'No media player given. Using the first available from: %s.' %
                 ', '.join(player_names))
             player_name = self.guess_player_name()
             if player_name is None:
                 raise MediaPlayerNotFound()
         if media.url.startswith('rtmp'):
-            self._play_rtmp(media, player_name)
+            self._play_rtmp(media, player_name, args=player_args)
         else:
             self._play_default(media, player_name)
 
@@ -91,10 +89,15 @@ class MediaPlayer(object):
         """
         Play media.url with the media player.
         """
-        print 'Invoking "%s %s".' % (player_name, media.url)
-        os.spawnlp(os.P_WAIT, player_name, player_name, media.url)
+        args = player_name.split(' ')
 
-    def _play_rtmp(self, media, player_name):
+        player_name = args[0]
+        args.append(media.url)
+
+        print 'Invoking "%s".' % (' '.join(args))
+        os.spawnlp(os.P_WAIT, player_name, *args)
+
+    def _play_rtmp(self, media, player_name, args):
         """
         Download data with rtmpdump and pipe them to a media player.
 
@@ -109,7 +112,7 @@ class MediaPlayer(object):
         media_url = media.url
         try:
             player_url = media.swf_player
-            if  media.swf_player:
+            if media.swf_player:
                 rtmp = 'rtmpdump -r %s --swfVfy %s' % (media_url, player_url)
             else:
                 rtmp = 'rtmpdump -r %s' % media_url
@@ -120,19 +123,23 @@ class MediaPlayer(object):
 
         rtmp += ' --quiet'
 
-        args = None
-        for (binary, stdin_args) in PLAYERS:
-            if binary == player_name:
-                args = stdin_args
+        if args is None:
+            for (binary, stdin_args) in PLAYERS:
+                if binary == player_name:
+                    args = stdin_args
+
         assert args is not None
+
+        player_name = player_name.split(' ')
+        args = args.split(' ')
 
         print ':: Streaming from %s' % media_url
         print ':: to %s %s' % (player_name, args)
         print ':: %s' % rtmp
         p1 = Popen(rtmp.split(), stdout=PIPE)
-        Popen([player_name, args], stdin=p1.stdout, stderr=PIPE)
+        Popen(player_name + args, stdin=p1.stdout, stderr=PIPE)
 
-    def _find_in_path(self,path, filename):
+    def _find_in_path(self, path, filename):
         for i in path.split(':'):
             if os.path.exists('/'.join([i, filename])):
                 return True

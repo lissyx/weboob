@@ -17,9 +17,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
 
-from weboob.capabilities.bill import ICapBill, SubscriptionNotFound, BillNotFound
+
+from weboob.capabilities.bill import ICapBill, SubscriptionNotFound, BillNotFound, Subscription, Bill
 from weboob.tools.backend import BaseBackend, BackendConfig
 from weboob.tools.value import ValueBackendPassword
 
@@ -31,9 +31,9 @@ __all__ = ['FreeMobileBackend']
 
 class FreeMobileBackend(BaseBackend, ICapBill):
     NAME = 'freemobile'
-    MAINTAINER = 'Florent Fourcot'
+    MAINTAINER = u'Florent Fourcot'
     EMAIL = 'weboob@flo.fourcot.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = 'Free Mobile website'
     CONFIG = BackendConfig(ValueBackendPassword('login',
@@ -50,8 +50,7 @@ class FreeMobileBackend(BaseBackend, ICapBill):
                                    self.config['password'].get())
 
     def iter_subscription(self):
-        for subscription in self.browser.get_subscription_list():
-            yield subscription
+        return self.browser.get_subscription_list()
 
     def get_subscription(self, _id):
         if not _id.isdigit():
@@ -63,9 +62,12 @@ class FreeMobileBackend(BaseBackend, ICapBill):
         else:
             raise SubscriptionNotFound()
 
-    def iter_history(self, subscription):
+    def iter_bills_history(self, subscription):
+        if not isinstance(subscription, Subscription):
+            subscription = self.get_subscription(subscription)
+
         with self.browser:
-            for history in self.browser.get_history():
+            for history in self.browser.get_history(subscription):
                 yield history
 
     def get_bill(self, id):
@@ -77,17 +79,24 @@ class FreeMobileBackend(BaseBackend, ICapBill):
             raise BillNotFound()
 
     def iter_bills(self, subscription):
+        if not isinstance(subscription, Subscription):
+            subscription = self.get_subscription(subscription)
+
         with self.browser:
-            sub = self.get_subscription(subscription)
-            for bill in self.browser.iter_bills(sub.id):
+            for bill in self.browser.iter_bills(subscription):
                 yield bill
 
-    # The subscription is actually useless, but maybe for the futur...
     def get_details(self, subscription):
+        if not isinstance(subscription, Subscription):
+            subscription = self.get_subscription(subscription)
+
         with self.browser:
-            for detail in self.browser.get_details():
+            for detail in self.browser.get_details(subscription):
                 yield detail
 
-    def download_bill(self, id):
+    def download_bill(self, bill):
+        if not isinstance(bill, Bill):
+            bill = self.get_bill(bill)
+
         with self.browser:
-            return self.browser.download_bill(id)
+            return self.browser.readurl(bill._url)

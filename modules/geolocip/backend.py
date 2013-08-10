@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.geolocip import ICapGeolocIp, IpLocation
 from weboob.tools.backend import BaseBackend
@@ -29,15 +29,12 @@ __all__ = ['GeolocIpBackend']
 
 class GeolocIpBackend(BaseBackend, ICapGeolocIp):
     NAME = 'geolocip'
-    MAINTAINER = 'Julien Veyssier'
+    MAINTAINER = u'Julien Veyssier'
     EMAIL = 'julien.veyssier@aiur.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = u"GeolocIP IP addresses geolocation service"
     BROWSER = BaseBrowser
-
-    def create_default_browser(self):
-        return self.create_browser()
 
     def get_location(self, ipaddr):
         with self.browser:
@@ -57,10 +54,10 @@ class GeolocIpBackend(BaseBackend, ICapGeolocIp):
                     tab[key] = value
                 last_line = line
             iploc = IpLocation(ipaddr)
-            iploc.city = tab['City']
-            iploc.region = tab['Region']
-            iploc.zipcode = tab['Postal code']
-            iploc.country = tab['Country name']
+            iploc.city = u'%s'%tab['City']
+            iploc.region = u'%s'%tab['Region']
+            iploc.zipcode = u'%s'%tab['Postal code']
+            iploc.country = u'%s'%tab['Country name']
             if tab['Latitude'] != '':
                 iploc.lt = float(tab['Latitude'])
             else:

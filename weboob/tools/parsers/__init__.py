@@ -60,6 +60,20 @@ def load_json():
     return JsonParser
 
 
+def load_csv():
+    # This parser doesn't read HTML, don't include it in the
+    # preference_order default value below.
+    from .csvparser import CsvParser
+    return CsvParser
+
+
+def load_raw():
+    # This parser doesn't read HTML, don't include it in the
+    # preference_order default value below.
+    from .iparser import RawParser
+    return RawParser
+
+
 def get_parser(preference_order=('lxml', 'lxmlsoup')):
     """
     Get a parser from a preference order list.

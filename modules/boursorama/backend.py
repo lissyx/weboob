@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+# Copyright(C) 2012      Gabriel Serme
 # Copyright(C) 2011      Gabriel Kerneis
 # Copyright(C) 2010-2011 Jocelyn Jaubert
 #
@@ -19,12 +20,9 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-# python2.5 compatibility
-from __future__ import with_statement
-
 from weboob.capabilities.bank import ICapBank, AccountNotFound
 from weboob.tools.backend import BaseBackend, BackendConfig
-from weboob.tools.value import ValueBackendPassword
+from weboob.tools.value import ValueBackendPassword, ValueBool, Value
 
 from .browser import Boursorama
 
@@ -34,18 +32,24 @@ __all__ = ['BoursoramaBackend']
 
 class BoursoramaBackend(BaseBackend, ICapBank):
     NAME = 'boursorama'
-    MAINTAINER = 'Gabriel Kerneis'
+    MAINTAINER = u'Gabriel Kerneis'
     EMAIL = 'gabriel@kerneis.info'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = u'Boursorama French bank website'
     CONFIG = BackendConfig(ValueBackendPassword('login',      label='Account ID', masked=False),
-                           ValueBackendPassword('password',   label='Password'))
+                           ValueBackendPassword('password',   label='Password'),
+                           ValueBool('enable_twofactors',     label='Send validation sms', default=False),
+                           Value('device',                    label='Device name', regexp='\w*', default=''),
+                          )
     BROWSER = Boursorama
 
     def create_default_browser(self):
-        return self.create_browser(self.config['login'].get(),
-                                   self.config['password'].get())
+        return self.create_browser(
+            self.config["device"].get()
+            , self.config["enable_twofactors"].get()
+            , self.config['login'].get()
+            , self.config['password'].get())
 
     def iter_accounts(self):
         for account in self.browser.get_accounts_list():

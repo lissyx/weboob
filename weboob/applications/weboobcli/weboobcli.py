@@ -28,12 +28,13 @@ __all__ = ['WeboobCli']
 
 class WeboobCli(ReplApplication):
     APPNAME = 'weboob-cli'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2011 Romain Bignon'
     SYNOPSIS =  'Usage: %prog [-dqv] [-b backends] [-cnfs] capability method [arguments..]\n'
     SYNOPSIS += '       %prog [--help] [--version]'
     DESCRIPTION = "Weboob-Cli is a console application to call a specific method on backends " \
                   "which implement the given capability."
+    SHORT_DESCRIPTION = "call a method on backends"
     DISABLE_REPL = True
 
     def load_default_backends(self):

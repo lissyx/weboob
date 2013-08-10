@@ -19,7 +19,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.video import ICapVideo
 from weboob.tools.backend import BaseBackend
@@ -33,9 +33,9 @@ __all__ = ['TricTracTVBackend']
 
 class TricTracTVBackend(BaseBackend, ICapVideo):
     NAME = 'trictractv'
-    MAINTAINER = 'Benjamin Drieu'
+    MAINTAINER = u'Benjamin Drieu'
     EMAIL = 'benjamin@drieu.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = u'TricTrac.tv video website'
     LICENSE = 'AGPLv3+'
     BROWSER = TricTracTVBrowser
@@ -44,7 +44,7 @@ class TricTracTVBackend(BaseBackend, ICapVideo):
         with self.browser:
             return self.browser.get_video(_id)
 
-    def search_videos(self, pattern=None, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=False, max_results=None):
+    def search_videos(self, pattern=None, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=False):
         with self.browser:
             return self.browser.search_videos(pattern)
 

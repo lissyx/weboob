@@ -24,8 +24,9 @@ __all__ = ['FormattersLoader', 'FormatterLoadError']
 class FormatterLoadError(Exception):
     pass
 
+
 class FormattersLoader(object):
-    BUILTINS = ['htmltable', 'multiline', 'simple', 'table', 'csv', 'webkit']
+    BUILTINS = ['htmltable', 'multiline', 'simple', 'table', 'csv', 'webkit', 'json']
 
     def __init__(self):
         self.formatters = {}
@@ -36,15 +37,14 @@ class FormattersLoader(object):
     def get_available_formatters(self):
         l = set(self.formatters.iterkeys())
         l = l.union(self.BUILTINS)
-        l = list(l)
-        l.sort()
+        l = sorted(l)
         return l
 
     def build_formatter(self, name):
         if not name in self.formatters:
             try:
                 self.formatters[name] = self.load_builtin_formatter(name)
-            except ImportError, e:
+            except ImportError as e:
                 FormattersLoader.BUILTINS.remove(name)
                 raise FormatterLoadError('Unable to load formatter "%s": %s' % (name, e))
         return self.formatters[name]()
@@ -71,3 +71,6 @@ class FormattersLoader(object):
         elif name == 'csv':
             from .csv import CSVFormatter
             return CSVFormatter
+        elif name == 'json':
+            from .json import JsonFormatter
+            return JsonFormatter

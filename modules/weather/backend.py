@@ -25,17 +25,15 @@ from .browser import WeatherBrowser
 
 __all__ = ['WeatherBackend']
 
+
 class WeatherBackend(BaseBackend, ICapWeather):
     NAME = 'weather'
-    MAINTAINER = 'Arno Renevier'
+    MAINTAINER = u'Arno Renevier'
     EMAIL = 'arno@renevier.net'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'Get forecasts from weather.com'
     LICENSE = 'AGPLv3+'
     BROWSER = WeatherBrowser
-
-    def create_default_browser(self):
-        return self.create_browser()
 
     def iter_city_search(self, pattern):
         return self.browser.iter_city_search(pattern)

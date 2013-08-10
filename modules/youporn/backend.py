@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.video import ICapVideo, BaseVideo
 from weboob.tools.backend import BaseBackend
@@ -33,9 +33,9 @@ __all__ = ['YoupornBackend']
 
 class YoupornBackend(BaseBackend, ICapVideo, ICapCollection):
     NAME = 'youporn'
-    MAINTAINER = 'Romain Bignon'
+    MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'YouPorn pornographic video streaming website'
     LICENSE = 'AGPLv3+'
     BROWSER = YoupornBrowser
@@ -46,7 +46,7 @@ class YoupornBackend(BaseBackend, ICapVideo, ICapCollection):
 
     SORTBY = ['relevance', 'rating', 'views', 'time']
 
-    def search_videos(self, pattern, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=False, max_results=None):
+    def search_videos(self, pattern, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=False):
         if not nsfw:
             return set()
         with self.browser:

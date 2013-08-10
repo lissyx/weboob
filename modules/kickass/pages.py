@@ -18,40 +18,44 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-try:
-    from urlparse import parse_qs
-except ImportError:
-    from cgi import parse_qs
-
-from urlparse import urlsplit
+from urlparse import parse_qs, urlsplit
 
 from weboob.capabilities.torrent import Torrent
-from weboob.capabilities.base import NotAvailable
+from weboob.capabilities.base import NotAvailable, NotLoaded
 from weboob.tools.browser import BasePage
 from weboob.tools.misc import get_bytes_size
 
 
-__all__ = ['TorrentsPage']
+__all__ = ['TorrentsPage', 'TorrentPage']
 
 
 class TorrentsPage(BasePage):
     def iter_torrents(self):
         for tr in self.document.getiterator('tr'):
             if tr.attrib.get('class', '') == 'odd' or tr.attrib.get('class', '') == ' even':
+                magnet = NotAvailable
+                url = NotAvailable
                 if not 'id' in tr.attrib:
                     continue
                 title = tr.getchildren()[0].getchildren()[1].getchildren()[1].text
                 if not title:
-                    title = ''
+                    title = u''
+                else:
+                    title = unicode(title)
                 for red in tr.getchildren()[0].getchildren()[1].getchildren()[1].getchildren():
                     title += red.text_content()
                 idt = tr.getchildren()[0].getchildren()[1].getchildren()[1].attrib.get('href', '').replace('/', '') \
                     .replace('.html', '')
 
                 # look for url
-                for a in tr.getchildren()[0].getiterator('a'):
-                    if '.torrent' in a.attrib.get('href', ''):
-                        url = a.attrib['href']
+                for a in self.parser.select(tr, 'div.iaconbox a'):
+                    href = a.attrib.get('href', '')
+                    if href.startswith('magnet'):
+                        magnet = unicode(href)
+                    elif href.startswith('http'):
+                        url = unicode(href)
+                    elif href.startswith('//'):
+                        url = u'https:%s' % href
 
                 size = tr.getchildren()[1].text
                 u = tr.getchildren()[1].getchildren()[0].text
@@ -62,7 +66,10 @@ class TorrentsPage(BasePage):
 
                 torrent = Torrent(idt, title)
                 torrent.url = url
-                torrent.filename = parse_qs(urlsplit(url).query).get('title', [None])[0]
+                torrent.magnet = magnet
+                torrent.description = NotLoaded
+                torrent.files = NotLoaded
+                torrent.filename = unicode(parse_qs(urlsplit(url).query).get('title', [None])[0])
                 torrent.size = get_bytes_size(size, u)
                 torrent.seeders = int(seed)
                 torrent.leechers = int(leech)
@@ -75,11 +82,12 @@ class TorrentPage(BasePage):
         leech = 0
         description = NotAvailable
         url = NotAvailable
+        magnet = NotAvailable
         title = NotAvailable
         for div in self.document.getiterator('div'):
             if div.attrib.get('id', '') == 'desc':
                 try:
-                    description = div.text_content().strip()
+                    description = unicode(div.text_content().strip())
                 except UnicodeDecodeError:
                     description = 'Description with invalid UTF-8.'
             elif div.attrib.get('class', '') == 'seedBlock':
@@ -94,22 +102,27 @@ class TorrentPage(BasePage):
                     leech = 0
 
         title = self.parser.select(self.document.getroot(),
-                'h1.torrentName span', 1)
-        title = title.text
+                                   'h1.torrentName span', 1)
+        title = unicode(title.text)
 
-        for a in self.document.getiterator('a'):
-            if ('Download' in a.attrib.get('title', '')) \
-            and ('torrent file' in a.attrib.get('title', '')):
-                url = a.attrib.get('href', '')
+        for a in self.parser.select(self.document.getroot(),
+                                    'div.downloadButtonGroup a'):
+            href = a.attrib.get('href', '')
+            if href.startswith('magnet'):
+                magnet = unicode(href)
+            elif href.startswith('//'):
+                url = u'https:%s' % href
+            elif href.startswith('http'):
+                url = unicode(href)
 
         size = 0
         u = ''
         for span in self.document.getiterator('span'):
             # sometimes there are others span, this is not so sure but the size of the children list
             # is enough to know if this is the right span
-            if (span.attrib.get('class', '') == 'folder' \
+            if (span.attrib.get('class', '') == 'folder'
                 or span.attrib.get('class', '') == 'folderopen') \
-            and len(span.getchildren()) > 2:
+                    and len(span.getchildren()) > 2:
                 size = span.getchildren()[1].tail
                 u = span.getchildren()[2].text
                 size = float(size.split(': ')[1].replace(',', '.'))
@@ -123,9 +136,12 @@ class TorrentPage(BasePage):
         torrent.url = url
         if torrent.url:
             torrent.filename = parse_qs(urlsplit(url).query).get('title', [None])[0]
+        torrent.magnet = magnet
         torrent.size = get_bytes_size(size, u)
         torrent.seeders = int(seed)
         torrent.leechers = int(leech)
+        if description == '':
+            description = NotAvailable
         torrent.description = description
         torrent.files = files
         return torrent

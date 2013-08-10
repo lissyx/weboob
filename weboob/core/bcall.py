@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from copy import copy
 from threading import Thread, Event, RLock, Timer
@@ -28,13 +28,13 @@ from weboob.tools.misc import get_backtrace
 from weboob.tools.log import getLogger
 
 
-__all__ = ['BackendsCall', 'CallErrors', 'IResultsCondition', 'ResultsConditionError']
+__all__ = ['BackendsCall', 'CallErrors']
 
 
 class CallErrors(Exception):
     def __init__(self, errors):
         msg = 'Errors during backend calls:\n' + \
-                '\n'.join(['Module(%s): %s\n%s\n' % (backend, error, backtrace)
+                '\n'.join(['Module(%r): %r\n%r\n' % (backend, error, backtrace)
                            for backend, error, backtrace in errors])
 
         Exception.__init__(self, msg)
@@ -43,28 +43,20 @@ class CallErrors(Exception):
     def __iter__(self):
         return self.errors.__iter__()
 
-class IResultsCondition(object):
-    def is_valid(self, obj):
-        raise NotImplementedError()
-
-class ResultsConditionError(Exception):
-    pass
 
 class BackendsCall(object):
-    def __init__(self, backends, condition, function, *args, **kwargs):
+    def __init__(self, backends, function, *args, **kwargs):
         """
-        @param backends  list of backends to call.
-        @param condition  a IResultsCondition object. Can be None.
-        @param function  backends' method name, or callable object.
-        @param args, kwargs  arguments given to called functions.
+        :param backends: List of backends to call
+        :type backends: list[:class:`BaseBackend`]
+        :param function: backends' method name, or callable object.
+        :type function: :class:`str` or :class:`callable`
         """
         self.logger = getLogger('bcall')
         # Store if a backend is finished
         self.backends = {}
         for backend in backends:
             self.backends[backend.name] = False
-        # Condition
-        self.condition = condition
         # Global mutex on object
         self.mutex = RLock()
         # Event set when every backends have give their data
@@ -81,7 +73,6 @@ class BackendsCall(object):
         # Create jobs for each backend
         with self.mutex:
             for backend in backends:
-                self.logger.debug('Creating a new thread for %s' % backend)
                 self.threads.append(Timer(0, self._caller, (backend, function, args, kwargs)).start())
             if not backends:
                 self.finish_event.set()
@@ -94,14 +85,11 @@ class BackendsCall(object):
     def _store_result(self, backend, result):
         with self.mutex:
             if isinstance(result, CapBaseObject):
-                if self.condition and not self.condition.is_valid(result):
-                    return
                 result.backend = backend.name
             self.responses.append((backend, result))
             self.response_event.set()
 
     def _caller(self, backend, function, args, kwargs):
-        self.logger.debug('%s: Thread created successfully' % backend)
         with backend:
             try:
                 # Call method on backend
@@ -111,7 +99,7 @@ class BackendsCall(object):
                         result = function(backend, *args, **kwargs)
                     else:
                         result = getattr(backend, function)(*args, **kwargs)
-                except Exception, error:
+                except Exception as error:
                     self.logger.debug('%s: Called function %s raised an error: %r' % (backend, function, error))
                     self._store_error(backend, error)
                 else:
@@ -124,7 +112,7 @@ class BackendsCall(object):
                                 # Lock mutex only in loop in case the iterator is slow
                                 # (for example if backend do some parsing operations)
                                 self._store_result(backend, subresult)
-                        except Exception, error:
+                        except Exception as error:
                             self._store_error(backend, error)
                     else:
                         self._store_result(backend, result)

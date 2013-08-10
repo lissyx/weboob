@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 import stat
 import os
@@ -42,38 +42,46 @@ class BackendsConfig(object):
         try:
             mode = os.stat(confpath).st_mode
         except OSError:
+            if not os.path.isdir(os.path.dirname(confpath)):
+                os.makedirs(os.path.dirname(confpath))
             if sys.platform == 'win32':
                 fptr = open(confpath, 'w')
                 fptr.close()
             else:
                 try:
-                    os.mknod(confpath, 0600)
+                    os.mknod(confpath, 0o600)
                 except OSError:
                     fptr = open(confpath, 'w')
                     fptr.close()
-                    os.chmod(confpath, 0600)
+                    os.chmod(confpath, 0o600)
         else:
             if sys.platform != 'win32':
                 if mode & stat.S_IRGRP or mode & stat.S_IROTH:
                     raise self.WrongPermissions(
-                        u'Weboob will not start until config file %s is readable by group or other users.' % confpath)
+                        u'Weboob will not start as long as config file %s is readable by group or other users.' % confpath)
 
     def iter_backends(self):
         config = RawConfigParser()
         config.read(self.confpath)
-        for instance_name in config.sections():
-            params = dict(config.items(instance_name))
+        changed = False
+        for backend_name in config.sections():
+            params = dict(config.items(backend_name))
             try:
-                backend_name = params.pop('_backend')
+                module_name = params.pop('_module')
             except KeyError:
                 try:
-                    backend_name = params.pop('_type')
-                    warning(u'Please replace _type with _backend in your config file "%s", for backend "%s"' % (
-                        self.confpath, backend_name))
+                    module_name = params.pop('_backend')
+                    config.set(backend_name, '_module', module_name)
+                    config.remove_option(backend_name, '_backend')
+                    changed = True
                 except KeyError:
-                    warning('Missing field "_backend" for configured backend "%s"', instance_name)
+                    warning('Missing field "_module" for configured backend "%s"', backend_name)
                     continue
-            yield instance_name, backend_name, params
+            yield backend_name, module_name, params
+
+        if changed:
+            with open(self.confpath, 'wb') as f:
+                config.write(f)
 
     def backend_exists(self, name):
         """
@@ -83,50 +91,50 @@ class BackendsConfig(object):
         config.read(self.confpath)
         return name in config.sections()
 
-    def add_backend(self, instance_name, backend_name, params, edit=False):
-        if not instance_name:
+    def add_backend(self, backend_name, module_name, params, edit=False):
+        if not backend_name:
             raise ValueError(u'Please give a name to the configured backend.')
         config = RawConfigParser()
         config.read(self.confpath)
         if not edit:
             try:
-                config.add_section(instance_name)
+                config.add_section(backend_name)
             except DuplicateSectionError:
-                raise BackendAlreadyExists(instance_name)
-        config.set(instance_name, '_backend', backend_name)
+                raise BackendAlreadyExists(backend_name)
+        config.set(backend_name, '_module', module_name)
         for key, value in params.iteritems():
             if isinstance(value, unicode):
                 value = value.encode('utf-8')
-            config.set(instance_name, key, value)
+            config.set(backend_name, key, value)
         with open(self.confpath, 'wb') as f:
             config.write(f)
 
-    def edit_backend(self, instance_name, backend_name, params):
-        return self.add_backend(instance_name, backend_name, params, True)
+    def edit_backend(self, backend_name, module_name, params):
+        return self.add_backend(backend_name, module_name, params, True)
 
-    def get_backend(self, instance_name):
+    def get_backend(self, backend_name):
         config = RawConfigParser()
         config.read(self.confpath)
-        if not config.has_section(instance_name):
-            raise KeyError(u'Configured backend "%s" not found' % instance_name)
+        if not config.has_section(backend_name):
+            raise KeyError(u'Configured backend "%s" not found' % backend_name)
 
-        items = dict(config.items(instance_name))
+        items = dict(config.items(backend_name))
 
         try:
-            backend_name = items.pop('_backend')
+            module_name = items.pop('_module')
         except KeyError:
             try:
-                backend_name = items.pop('_type')
-                warning(u'Please replace _type with _backend in your config file "%s"' % self.confpath)
+                module_name = items.pop('_backend')
+                self.edit_backend(backend_name, module_name, items)
             except KeyError:
-                warning('Missing field "_backend" for configured backend "%s"', instance_name)
-                raise KeyError(u'Configured backend "%s" not found' % instance_name)
-        return backend_name, items
+                warning('Missing field "_module" for configured backend "%s"', backend_name)
+                raise KeyError(u'Configured backend "%s" not found' % backend_name)
+        return module_name, items
 
-    def remove_backend(self, instance_name):
+    def remove_backend(self, backend_name):
         config = RawConfigParser()
         config.read(self.confpath)
-        if not config.remove_section(instance_name):
+        if not config.remove_section(backend_name):
             return False
         with open(self.confpath, 'w') as f:
             config.write(f)

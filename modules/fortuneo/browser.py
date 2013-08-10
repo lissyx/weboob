@@ -19,29 +19,33 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from weboob.tools.browser import BaseBrowser
+from datetime import date
+from dateutil.relativedelta import relativedelta
+
+from weboob.tools.browser import BaseBrowser, BrowserIncorrectPassword
 
 from .pages.login import LoginPage
-from .pages.accounts_list import AccountsList, AccountHistoryPage
+from .pages.accounts_list import GlobalAccountsList, AccountsList, AccountHistoryPage
 
 __all__ = ['Fortuneo']
+
 
 class Fortuneo(BaseBrowser):
     DOMAIN_LOGIN = 'www.fortuneo.fr'
     DOMAIN = 'www.fortuneo.fr'
     PROTOCOL = 'https'
+    CERTHASH = ['f71bd27994f395963c4a500d9d330cb50cef37ee5946146f9ca2492c2552b2ba', '97628e02c676d88bb8eb6d91a10b50cffd7275e273902975b4e1eb7154270c4e']
     ENCODING = None # refer to the HTML encoding
     PAGES = {
-            '.*identification.jsp.*':
-                    LoginPage,
-            '.*/prive/mes-comptes/synthese-tous-comptes\.jsp.*':
-                    AccountsList,
-            '.*/prive/mes-comptes/livret/consulter-situation/consulter-solde\.jsp\?COMPTE_ACTIF=.*':
-                    AccountHistoryPage,
-            '.*/prive/mes-comptes/compte-courant/consulter-situation/consulter-solde\.jsp\?COMPTE_ACTIF=.*':
-                    AccountHistoryPage,
-            '.*/prive/default\.jsp.*':
-                    AccountsList
+            '.*identification\.jsp.*' :                                                         LoginPage,
+
+            '.*prive/default\.jsp.*' :                                                          AccountsList,
+            '.*/prive/mes-comptes/synthese-mes-comptes\.jsp' :                                  AccountsList,
+            '.*/prive/mes-comptes/synthese-globale/synthese-mes-comptes\.jsp' :                 GlobalAccountsList,
+
+            '.*/prive/mes-comptes/livret/consulter-situation/consulter-solde\.jsp.*' :          AccountHistoryPage,
+            '.*/prive/mes-comptes/compte-courant/consulter-situation/consulter-solde\.jsp.*' :  AccountHistoryPage,
+
             }
 
     def __init__(self, *args, **kwargs):
@@ -50,15 +54,12 @@ class Fortuneo(BaseBrowser):
     def home(self):
         """main page (login)"""
 
-        self.location('https://' + self.DOMAIN_LOGIN + '/fr/prive/identification.jsp')
+        self.login()
 
     def is_logged(self):
         """Return True if we are logged on website"""
 
-        if self.is_on_page(AccountHistoryPage) or self.is_on_page(AccountsList):
-            return True
-        else:
-            return False
+        return self.page is not None and not self.is_on_page(LoginPage)
 
     def login(self):
         """Login to the website.
@@ -69,21 +70,34 @@ class Fortuneo(BaseBrowser):
         assert isinstance(self.password, basestring)
 
         if not self.is_on_page(LoginPage):
-            self.location('https://' + self.DOMAIN_LOGIN + '/fr/identification.jsp')
+            self.location('https://' + self.DOMAIN_LOGIN + '/fr/identification.jsp', no_login=True)
 
         self.page.login(self.username, self.password)
-        self.location('https://' + self.DOMAIN_LOGIN + '/fr/prive/mes-comptes/synthese-tous-comptes.jsp')
+
+        if self.is_on_page(LoginPage):
+            raise BrowserIncorrectPassword()
+
+        self.location('https://' + self.DOMAIN_LOGIN + '/fr/prive/mes-comptes/synthese-mes-comptes.jsp')
+
+        if self.is_on_page(AccountsList) and self.page.need_reload():
+            self.location('/ReloadContext?action=1&')
 
     def get_history(self, account):
-        if not self.is_on_page(AccountHistoryPage):
-            self.location(account._link_id)
+        self.location(account._link_id)
+
+        self.select_form(name='ConsultationHistoriqueOperationsForm')
+        self.set_all_readonly(False)
+        self['dateRechercheDebut'] = (date.today() - relativedelta(years=1)).strftime('%d/%m/%Y')
+        self['nbrEltsParPage'] = '100'
+        self.submit()
+
         return self.page.get_operations(account)
 
     def get_accounts_list(self):
         """accounts list"""
 
         if not self.is_on_page(AccountsList):
-            self.location('https://' + self.DOMAIN_LOGIN + '/fr/prive/mes-comptes/synthese-tous-comptes.jsp')
+            self.location('https://' + self.DOMAIN_LOGIN + '/fr/prive/mes-comptes/synthese-mes-comptes.jsp')
 
         return self.page.get_list()
 

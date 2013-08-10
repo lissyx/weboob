@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.housing import ICapHousing, City, Housing, HousingPhoto
 from weboob.tools.backend import BaseBackend
@@ -32,7 +32,7 @@ class PapBackend(BaseBackend, ICapHousing):
     NAME = 'pap'
     MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'French housing website'
     LICENSE = 'AGPLv3+'
     BROWSER = PapBrowser
@@ -60,7 +60,7 @@ class PapBackend(BaseBackend, ICapHousing):
         with self.browser:
             for city in self.browser.search_geo(pattern):
                 c = City(city['id'])
-                c.name = city['name']
+                c.name = unicode(city['name'])
                 yield c
 
     def fill_housing(self, housing, fields):

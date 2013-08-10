@@ -1,6 +1,7 @@
-.TH RADIOOB 1 "04 May 2012" "radioob 0\&.c"
+.\" -*- coding: utf-8 -*-
+.TH RADIOOB 1 "03 August 2013" "radioob 0\&.g"
 .SH NAME
-radioob
+radioob \- search, show or listen to radio stations
 .SH SYNOPSIS
 .B radioob
 [\-dqv] [\-b \fIbackends\fR] [\-cnfs] [\fIcommand\fR [\fIarguments\fR..]]
@@ -36,6 +37,10 @@ List radios matching a PATTERN.
 
 .br
 If PATTERN is not given, this command will list all the radios.
+.br
+
+.br
+Default is limited to 10 results.
 .SH WEBOOB COMMANDS
 .TP
 \fBbackends\fR [\fIACTION\fR] [\fIBACKEND_NAME\fR]...
@@ -170,6 +175,12 @@ show this help message and exit
 .TP
 \fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
 what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
 
 .SH LOGGING OPTIONS
 .TP
@@ -194,7 +205,7 @@ save every response
 filter result items to display given a boolean expression
 .TP
 \fB\-n COUNT\fR, \fB\-\-count=COUNT\fR
-get a maximum number of results (all backends merged)
+limit number of results (from each backends)
 .TP
 \fB\-s SELECT\fR, \fB\-\-select=SELECT\fR
 select result item keys to display (comma separated)
@@ -202,8 +213,8 @@ select result item keys to display (comma separated)
 .SH FORMATTING OPTIONS
 .TP
 \fB\-f FORMATTER\fR, \fB\-\-formatter=FORMATTER\fR
-select output formatter (csv, htmltable, multiline, radio_list, simple, table,
-webkit)
+select output formatter (csv, htmltable, json, multiline, radio_list, simple,
+table, webkit)
 .TP
 \fB\-\-no\-header\fR
 do not display header

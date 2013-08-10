@@ -20,6 +20,7 @@
 
 import re
 from .ordereddict import OrderedDict
+from .misc import to_unicode
 
 
 __all__ = ['ValuesDict', 'Value', 'ValueBackendPassword', 'ValueInt', 'ValueFloat', 'ValueBool']
@@ -29,13 +30,13 @@ class ValuesDict(OrderedDict):
     """
     Ordered dictionarry which can take values in constructor.
 
-    >>> ValuesDict(Value('a', label='Test'),
-                   ValueInt('b', label='Test2'))
+    >>> ValuesDict(Value('a', label='Test'), ValueInt('b', label='Test2'))
     """
     def __init__(self, *values):
         OrderedDict.__init__(self)
         for v in values:
             self[v.id] = v
+
 
 class Value(object):
     """
@@ -43,7 +44,7 @@ class Value(object):
 
     :param label: human readable description of a value
     :type label: str
-    :param required: if ``True``, the backend can't loaded if the key isn't found in its configuration
+    :param required: if ``True``, the backend can't load if the key isn't found in its configuration
     :type required: bool
     :param default: an optional default value, used when the key is not in config. If there is no default value and the key
                     is not found in configuration, the **required** parameter is implicitly set
@@ -52,6 +53,7 @@ class Value(object):
     :param regexp: if specified, on load the specified value is checked against this regexp, and an error is raised if it doesn't match
     :type regexp: str
     :param choices: if this parameter is set, the value must be in the list
+    :param tiny: the value of choices can be entered by an user (as they are small)
     :type choices: (list,dict)
     """
 
@@ -65,8 +67,9 @@ class Value(object):
         self.default = kwargs.get('default', None)
         self.regexp = kwargs.get('regexp', None)
         self.choices = kwargs.get('choices', None)
-        if isinstance(self.choices, (list,tuple)):
+        if isinstance(self.choices, (list, tuple)):
             self.choices = dict(((v, v) for v in self.choices))
+        self.tiny = kwargs.get('tiny', None)
         self.masked = kwargs.get('masked', False)
         self.required = kwargs.get('required', self.default is None)
         self._value = kwargs.get('value', None)
@@ -77,6 +80,8 @@ class Value(object):
 
         :raises: ValueError
         """
+        if self.default is not None and v == self.default:
+            return
         if v == '' and self.default != '':
             raise ValueError('Value can\'t be empty')
         if self.regexp is not None and not re.match(self.regexp, unicode(v)):
@@ -102,6 +107,8 @@ class Value(object):
         Set a value.
         """
         self.check_valid(v)
+        if isinstance(v, str):
+            v = to_unicode(v)
         self._value = v
 
     def dump(self):
@@ -116,6 +123,7 @@ class Value(object):
         """
         return self._value
 
+
 class ValueBackendPassword(Value):
     _domain = None
     _callbacks = {}
@@ -127,8 +135,9 @@ class ValueBackendPassword(Value):
         Value.__init__(self, *args, **kwargs)
 
     def load(self, domain, password, callbacks):
+        self.check_valid(password)
         self._domain = domain
-        self._value = password
+        self._value = to_unicode(password)
         self._callbacks = callbacks
 
     def check_valid(self, passwd):
@@ -146,7 +155,7 @@ class ValueBackendPassword(Value):
         if passwd == '':
             return
         if self._domain is None:
-            self._value = passwd
+            self._value = to_unicode(passwd)
             return
 
         try:
@@ -154,7 +163,7 @@ class ValueBackendPassword(Value):
             import keyring
             keyring.set_password(self._domain, self.id, passwd)
         except Exception:
-            self._value = passwd
+            self._value = to_unicode(passwd)
         else:
             self._value = ''
 
@@ -178,16 +187,17 @@ class ValueBackendPassword(Value):
 
         if passwd is not None:
             # Password has been read in the keyring.
-            return passwd
+            return to_unicode(passwd)
 
         # Prompt user to enter password by hand.
         if not self.noprompt and 'login' in self._callbacks:
-            self._value = self._callbacks['login'](self._domain, self)
+            self._value = to_unicode(self._callbacks['login'](self._domain, self))
             if self._value is None:
                 self._value = ''
             else:
                 self._stored = False
         return self._value
+
 
 class ValueInt(Value):
     def __init__(self, *args, **kwargs):
@@ -196,6 +206,7 @@ class ValueInt(Value):
 
     def get(self):
         return int(self._value)
+
 
 class ValueFloat(Value):
     def __init__(self, *args, **kwargs):
@@ -210,6 +221,7 @@ class ValueFloat(Value):
 
     def get(self):
         return float(self._value)
+
 
 class ValueBool(Value):
     def __init__(self, *args, **kwargs):

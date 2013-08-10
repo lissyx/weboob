@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright(C) 2010-2011  Christophe Benz
+# Copyright(C) 2010-2013  Christophe Benz, Julien Hebert
 #
 # This file is part of weboob.
 #
@@ -18,8 +18,6 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
-
 import os
 import sys
 import subprocess
@@ -27,13 +25,26 @@ if sys.platform == 'win32':
     import WConio
 
 try:
-    import tty, termios
+    from termcolor import colored
+except ImportError:
+    def colored(s, color=None, on_color=None, attrs=None):
+        if os.getenv('ANSI_COLORS_DISABLED') is None \
+                and attrs is not None and 'bold' in attrs:
+            return '%s%s%s' % (IFormatter.BOLD, s, IFormatter.NC)
+        else:
+            return s
+
+try:
+    import tty
+    import termios
 except ImportError:
     PROMPT = '--Press return to continue--'
+
     def readch():
         return sys.stdin.readline()
 else:
     PROMPT = '--Press a key to continue--'
+
     def readch():
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
@@ -48,8 +59,8 @@ else:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 from weboob.capabilities.base import CapBaseObject
-from weboob.tools.ordereddict import OrderedDict
 from weboob.tools.application.console import ConsoleApplication
+from weboob.tools.ordereddict import OrderedDict
 
 
 __all__ = ['IFormatter', 'MandatoryFieldsNotFound']
@@ -63,20 +74,16 @@ class MandatoryFieldsNotFound(Exception):
 class IFormatter(object):
     MANDATORY_FIELDS = None
 
-    def get_bold(self):
-        if self.outfile != sys.stdout:
-            return ''
-        else:
-            return ConsoleApplication.BOLD
+    BOLD = ConsoleApplication.BOLD
+    NC = ConsoleApplication.NC
 
-    def get_nc(self):
-        if self.outfile != sys.stdout:
-            return ''
-        else:
-            return ConsoleApplication.NC
+    def colored(self, string, color, attrs=None, on_color=None):
+        if self.outfile != sys.stdout or not (os.isatty(self.outfile.fileno())):
+            return string
 
-    BOLD = property(get_bold)
-    NC = property(get_nc)
+        if isinstance(attrs, basestring):
+            attrs = [attrs]
+        return colored(string, color, on_color=on_color, attrs=attrs)
 
     def __init__(self, display_keys=True, display_header=True, outfile=sys.stdout):
         self.display_keys = display_keys
@@ -91,7 +98,9 @@ class IFormatter(object):
             if sys.platform == 'win32':
                 self.termrows = WConio.gettextinfo()[8]
             else:
-                self.termrows = int(subprocess.Popen('stty size', shell=True, stdout=subprocess.PIPE).communicate()[0].split()[0])
+                self.termrows = int(
+                    subprocess.Popen('stty size', shell=True, stdout=subprocess.PIPE).communicate()[0].split()[0]
+                )
 
     def output(self, formatted):
         if self.outfile != sys.stdout:
@@ -144,7 +153,10 @@ class IFormatter(object):
 
             formatted = self.format_obj(obj, alias)
         else:
-            obj = self.to_dict(obj)
+            try:
+                obj = OrderedDict(obj)
+            except ValueError:
+                raise TypeError('Please give a CapBaseObject or a dict')
 
             if selected_fields is not None and not '*' in selected_fields:
                 obj = obj.copy()
@@ -163,7 +175,6 @@ class IFormatter(object):
             self.output(formatted)
         return formatted
 
-
     def format_obj(self, obj, alias=None):
         """
         Format an object to be human-readable.
@@ -174,7 +185,7 @@ class IFormatter(object):
         :type obj: CapBaseObject
         :rtype: str
         """
-        return self.format_dict(self.to_dict(obj))
+        return self.format_dict(obj.to_dict())
 
     def format_dict(self, obj):
         """
@@ -186,38 +197,24 @@ class IFormatter(object):
         """
         return NotImplementedError()
 
-    def to_dict(self, obj):
-        if not isinstance(obj, CapBaseObject):
-            try:
-                return OrderedDict(obj)
-            except ValueError:
-                raise TypeError('Please give a CapBaseObject or a dict')
-
-        def iter_decorate(d):
-            for key, value in d:
-                if key == 'id' and obj.backend is not None:
-                    value = obj.fullid
-                yield key, value
-
-        fields_iterator = obj.iter_fields()
-        return OrderedDict(iter_decorate(fields_iterator))
-
 
 class PrettyFormatter(IFormatter):
     def format_obj(self, obj, alias):
         title = self.get_title(obj)
         desc = self.get_description(obj)
 
-        if desc is None:
-            title = '%s%s%s' % (self.NC, title, self.BOLD)
-
         if alias is not None:
-            result = u'%s* (%s) %s (%s)%s' % (self.BOLD, alias, title, obj.backend, self.NC)
+            result = u'%s %s %s (%s)' % (self.colored('%2s' % alias, 'red', 'bold'),
+                                         self.colored(u'—', 'cyan', 'bold'),
+                                         self.colored(title, 'yellow', 'bold'),
+                                         self.colored(obj.backend, 'blue', 'bold'))
         else:
-            result = u'%s* (%s) %s%s' % (self.BOLD, obj.fullid, title, self.NC)
+            result = u'%s %s %s' % (self.colored(obj.fullid, 'red', 'bold'),
+                                    self.colored(u'—', 'cyan', 'bold'),
+                                    self.colored(title, 'yellow', 'bold'))
 
         if desc is not None:
-            result += u'\n\t%s' % desc
+            result += u'\n\t%s' % self.colored(desc, 'white')
 
         return result
 

@@ -18,54 +18,95 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from weboob.core.bcall import IResultsCondition, ResultsConditionError
-
-
 __all__ = ['ResultsCondition', 'ResultsConditionError']
+
+class IResultsCondition(object):
+    def is_valid(self, obj):
+        raise NotImplementedError()
+
+
+class ResultsConditionError(Exception):
+    pass
+
+
+class Condition(object):
+    def __init__(self, left, op, right):
+        self.left = left  # Field of the object to test
+        self.op = op
+        self.right = right
+
+
+def is_egal(left, right):
+    return left == right
+
+
+def is_notegal(left, right):
+    return left != right
+
+
+def is_sup(left, right):
+    return left < right
+
+
+def is_inf(left, right):
+    return left > right
+
+
+def is_in(left, right):
+    return left in right
+
+functions = {'!=': is_notegal, '=': is_egal, '>': is_sup, '<': is_inf, '|': is_in}
 
 
 class ResultsCondition(IResultsCondition):
     condition_str = None
 
+    # Supported operators
+    # =, !=, <, > for float/int/decimal
+    # =, != for strings
+    # We build a list of list. Return true if each conditions of one list is TRUE
     def __init__(self, condition_str):
-        condition_str = condition_str.replace(' OR ', ' or ') \
-                                     .replace(' AND ', ' and ') \
-                                     .replace(' NOT ', ' not ')
         or_list = []
-        for _or in condition_str.split(' or '):
-            and_dict = {}
-            for _and in _or.split(' and '):
-                if '!=' in _and:
-                    k, v = _and.split('!=')
-                    k = k.strip() + '!'
-                elif '=' in _and:
-                    k, v = _and.split('=')
-                else:
-                    raise ResultsConditionError(u'Could not find = or != operator in sub-expression "%s"' % _and)
-                and_dict[k.strip()] = v.strip()
-            or_list.append(and_dict)
+        for _or in condition_str.split(' OR '):
+            and_list = []
+            for _and in _or.split(' AND '):
+                operator = None
+                for op in ['!=', '=', '>', '<', '|']:
+                    if op in _and:
+                        operator = op
+                        break
+                if operator is None:
+                    raise ResultsConditionError(u'Could not find a valid operator in sub-expression "%s"' % _and)
+                l, r = _and.split(operator)
+                and_list.append(Condition(l, operator, r))
+            or_list.append(and_list)
         self.condition = or_list
         self.condition_str = condition_str
 
     def is_valid(self, obj):
         d = dict(obj.iter_fields())
+        # We evaluate all member of a list at each iteration.
         for _or in self.condition:
-            for k, v in _or.iteritems():
-                if k.endswith('!'):
-                    k = k[:-1]
-                    different = True
+            myeval = True
+            for condition in _or:
+                if condition.left in d:
+                    # We have to change the type of v, always gived as string by application
+                    typed = type(d[condition.left])
+                    try:
+                        tocompare = typed(condition.right)
+                        myeval = functions[condition.op](tocompare, d[condition.left])
+                    except:
+                        myeval = False
                 else:
-                    different = False
-                if k in d:
-                    if different:
-                        if d[k] == v:
-                            return False
-                    else:
-                        if d[k] != v:
-                            return False
-                else:
-                    raise ResultsConditionError(u'Field "%s" is not valid.' % k)
-        return True
+                    raise ResultsConditionError(u'Field "%s" is not valid.' % condition.left)
+                # Do not try all AND conditions if one is false
+                if not myeval:
+                    break
+            # Return True at the first OR valid condition
+            if myeval:
+                return True
+        # If we are here, all OR conditions are False
+        return False
 
     def __str__(self):
         return unicode(self).encode('utf-8')

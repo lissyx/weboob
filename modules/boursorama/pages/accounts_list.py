@@ -23,7 +23,7 @@ from decimal import Decimal
 
 from weboob.capabilities.bank import Account
 from weboob.tools.browser import BasePage
-from weboob.tools.misc import to_unicode
+from weboob.tools.capabilities.bank.transactions import FrenchTransaction
 
 
 class AccountsList(BasePage):
@@ -31,20 +31,31 @@ class AccountsList(BasePage):
         pass
 
     def get_list(self):
-        l = []
         for div in self.document.getiterator('div'):
             if div.attrib.get('id', '') == 'synthese-list':
                 for tr in div.getiterator('tr'):
                     account = Account()
                     account.id = None
+                    account._link_id = None
                     for td in tr.getiterator('td'):
                         if td.attrib.get('class', '') == 'account-cb':
                             break
 
                         elif td.attrib.get('class', '') == 'account-name':
-                            a = td.find('a')
-                            account.label = to_unicode(a.text)
-                            account._link_id = a.get('href', '')
+                            try:
+                                span = td.xpath('./span[@class="label"]')[0]
+                            except IndexError:
+                                # ignore account
+                                break
+                            account.label = self.parser.tocleanstring(span)
+                            account._link_id = td.xpath('.//a')[0].attrib['href']
+
+                        elif td.attrib.get('class', '') == 'account-more-actions':
+                            for a in td.getiterator('a'):
+                                # For normal account, two "account-more-actions"
+                                # One for the account, one for the credit card. Take the good one
+                                if "mouvements.phtml" in a.attrib['href'] and "/cartes/" not in a.attrib['href']:
+                                    account._link_id = a.attrib['href']
 
                         elif td.attrib.get('class', '') == 'account-number':
                             id = td.text
@@ -53,11 +64,12 @@ class AccountsList(BasePage):
 
                         elif td.attrib.get('class', '') == 'account-total':
                             span = td.find('span')
-                            if span == None:
+                            if span is None:
                                 balance = td.text
                             else:
                                 balance = span.text
-                            balance = balance.strip(u' \n\t€+').replace(',', '.').replace(' ', '')
+                            account.currency = account.get_currency(balance)
+                            balance = FrenchTransaction.clean_amount(balance)
                             if balance != "":
                                 account.balance = Decimal(balance)
                             else:
@@ -66,6 +78,4 @@ class AccountsList(BasePage):
                     else:
                         # because of some weird useless <tr>
                         if account.id is not None:
-                            l.append(account)
-
-        return l
+                            yield account

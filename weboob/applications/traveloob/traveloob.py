@@ -23,7 +23,7 @@ from datetime import datetime
 import logging
 
 from weboob.capabilities.travel import ICapTravel, RoadmapFilters
-from weboob.tools.application.repl import ReplApplication
+from weboob.tools.application.repl import ReplApplication, defaultcount
 
 
 __all__ = ['Traveloob']
@@ -31,9 +31,10 @@ __all__ = ['Traveloob']
 
 class Traveloob(ReplApplication):
     APPNAME = 'traveloob'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2011 Romain Bignon'
-    DESCRIPTION = 'Console application allowing to search for train stations and get departure times.'
+    DESCRIPTION = "Console application allowing to search for train stations and get departure times."
+    SHORT_DESCRIPTION = "search for train stations and departures"
     CAPS = ICapTravel
     DEFAULT_FORMATTER = 'table'
 
@@ -41,6 +42,7 @@ class Traveloob(ReplApplication):
         group.add_option('--departure-time')
         group.add_option('--arrival-time')
 
+    @defaultcount(10)
     def do_stations(self, pattern):
         """
         stations PATTERN
@@ -49,8 +51,8 @@ class Traveloob(ReplApplication):
         """
         for backend, station in self.do('iter_station_search', pattern):
             self.format(station)
-        self.flush()
 
+    @defaultcount(10)
     def do_departures(self, line):
         """
         departures STATION [ARRIVAL]
@@ -77,7 +79,6 @@ class Traveloob(ReplApplication):
 
         for backend, departure in self.do('iter_station_departures', station_id, arrival_id, backends=backends):
             self.format(departure)
-        self.flush()
 
     def do_roadmap(self, line):
         """
@@ -100,14 +101,13 @@ class Traveloob(ReplApplication):
         try:
             filters.departure_time = self.parse_datetime(self.options.departure_time)
             filters.arrival_time = self.parse_datetime(self.options.arrival_time)
-        except ValueError, e:
+        except ValueError as e:
             print >>sys.stderr, 'Invalid datetime value: %s' % e
             print >>sys.stderr, 'Please enter a datetime in form "yyyy-mm-dd HH:MM" or "HH:MM".'
             return 1
 
         for backend, route in self.do('iter_roadmap', departure, arrival, filters):
             self.format(route)
-        self.flush()
 
     def parse_datetime(self, text):
         if text is None:

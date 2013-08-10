@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.library import ICapBook
 from weboob.tools.backend import BaseBackend, BackendConfig
@@ -34,10 +34,10 @@ class AloesBackend(BaseBackend, ICapBook):
     NAME = 'opacwebaloes'
     MAINTAINER = u'Jeremy Monnet'
     EMAIL = 'jmonnet@gmail.com'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'Aloes Library software'
     LICENSE = 'AGPLv3+'
-    CONFIG = BackendConfig(Value('login',    label='Account ID', regexp='^\d{1,6}\w$'),
+    CONFIG = BackendConfig(Value('login',    label='Account ID', regexp='^\d{1,8}\w$'),
                            ValueBackendPassword('password', label='Password of account'),
                            Value('baseurl',    label='Base URL')
                            )

@@ -18,8 +18,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
-
 import sys
 import os
 import tempfile
@@ -37,11 +35,11 @@ DEST_DIR = 'man'
 
 class ManpageHelpFormatter(optparse.HelpFormatter):
     def __init__(self,
-            app,
-            indent_increment=0,
-            max_help_position=0,
-            width=80,
-            short_first=1):
+                 app,
+                 indent_increment=0,
+                 max_help_position=0,
+                 width=80,
+                 short_first=1):
         optparse.HelpFormatter.__init__(self, indent_increment, max_help_position, width, short_first)
         self.app = app
 
@@ -113,8 +111,7 @@ def main():
         if os.path.isfile(fpath) and os.access(fpath, os.X_OK):
             with open(fpath) as f:
                 # Python will likely want create a compiled file, we provide a place
-                tmpdir = os.path.join(tempfile.gettempdir(), \
-                        "weboob", "make_man")
+                tmpdir = os.path.join(tempfile.gettempdir(), "weboob", "make_man")
                 if not os.path.isdir(tmpdir):
                     os.makedirs(tmpdir)
                 tmpfile = os.path.join(tmpdir, fname)
@@ -122,7 +119,7 @@ def main():
                 desc = ("", "U", imp.PY_SOURCE)
                 try:
                     script = imp.load_module("scripts.%s" % fname, f, tmpfile, desc)
-                except ImportError, e:
+                except ImportError as e:
                     print >>sys.stderr, "Unable to load the %s script (%s)" \
                         % (fname, e)
                 else:
@@ -162,9 +159,10 @@ def analyze_application(app, script_name):
     cmd_re = re.compile(r'^.+ Commands:$', re.MULTILINE)
     helptext = re.sub(cmd_re, format_title, helptext)
     helptext = helptext.replace("-", r"\-")
+    coding = r'.\" -*- coding: utf-8 -*-'
     header = '.TH %s 1 "%s" "%s %s"' % (script_name.upper(), time.strftime("%d %B %Y"),
                                         script_name, app.VERSION.replace('.', '\\&.'))
-    name = ".SH NAME\n%s" % script_name
+    name = ".SH NAME\n%s \- %s" % (script_name, application.SHORT_DESCRIPTION)
     footer = """.SH COPYRIGHT
 %s
 .LP
@@ -179,7 +177,7 @@ For full COPYRIGHT see COPYING file with weboob package.
     # Skip internal applications.
     footer += "\n\n.SH SEE ALSO\nHome page: http://weboob.org/applications/%s" % application.APPNAME
 
-    mantext = u"%s\n%s\n%s\n%s" % (header, name, helptext, footer)
+    mantext = u"%s\n%s\n%s\n%s\n%s" % (coding, header, name, helptext, footer)
     with open(os.path.join(BASE_PATH, DEST_DIR, "%s.1" % script_name), 'w+') as manfile:
         for line in mantext.split('\n'):
             manfile.write('%s\n' % line.lstrip().encode('utf-8'))

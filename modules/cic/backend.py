@@ -17,9 +17,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from decimal import Decimal
+import string
 
 from weboob.capabilities.bank import ICapBank, AccountNotFound, Recipient, Account
 from weboob.tools.backend import BaseBackend, BackendConfig
@@ -33,9 +34,9 @@ __all__ = ['CICBackend']
 
 class CICBackend(BaseBackend, ICapBank):
     NAME = 'cic'
-    MAINTAINER = 'Romain Bignon'
+    MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = u'CIC French bank website'
     LICENSE = 'AGPLv3+'
     CONFIG = BackendConfig(ValueBackendPassword('login',    label='Account ID', regexp='^\d{1,13}\w$', masked=False),
@@ -56,12 +57,20 @@ class CICBackend(BaseBackend, ICapBank):
         else:
             raise AccountNotFound()
 
+    def iter_coming(self, account):
+        with self.browser:
+            for tr in self.browser.get_history(account):
+                if tr._is_coming:
+                    yield tr
+
     def iter_history(self, account):
-        for history in self.browser.get_history(account):
-            yield history
+        with self.browser:
+            for tr in self.browser.get_history(account):
+                if not tr._is_coming:
+                    yield tr
 
     def iter_transfer_recipients(self, ignored):
-        for account in self.browser.get_accounts_list().itervalues():
+        for account in self.browser.get_accounts_list():
             recipient = Recipient()
             recipient.id = account.id
             recipient.label = account.label
@@ -71,6 +80,8 @@ class CICBackend(BaseBackend, ICapBank):
         if isinstance(account, Account):
             account = account.id
 
+        account = str(account).strip(string.letters)
+        to = str(to).strip(string.letters)
         try:
             assert account.isdigit()
             assert to.isdigit()

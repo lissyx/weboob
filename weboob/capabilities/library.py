@@ -34,11 +34,13 @@ class Book(CapBaseObject):
     date =      DateField('The due date')
     late =      Field('Are you late?', bool)
 
+
 class Renew(CapBaseObject):
     """
     A renew message.
     """
     message = StringField('Message')
+
 
 class ICapBook(ICapCollection):
     """
@@ -52,12 +54,10 @@ class ICapBook(ICapCollection):
             self._restrict_level(split_path)
             return self.iter_books()
 
-    def iter_books(self, pattern):
+    def iter_books(self):
         """
-        Iter books from a pattern.
+        Iter books.
 
-        :param pattern: pattern to search
-        :type pattern: str
         :rtype: iter[:class:`Book`]
         """
         raise NotImplementedError()

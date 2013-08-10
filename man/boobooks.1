@@ -1,6 +1,7 @@
-.TH BOOBOOKS 1 "04 May 2012" "boobooks 0\&.c"
+.\" -*- coding: utf-8 -*-
+.TH BOOBOOKS 1 "03 August 2013" "boobooks 0\&.g"
 .SH NAME
-boobooks
+boobooks \- manage rented books
 .SH SYNOPSIS
 .B boobooks
 [\-dqv] [\-b \fIbackends\fR] [\-cnfs] [\fIcommand\fR [\fIarguments\fR..]]
@@ -126,7 +127,7 @@ Availables: debug, info, warning, error.
 .br
 * default is an alias for warning
 .TP
-\fBls\fR [\fIPATH\fR]
+\fBls\fR [\-d] [\fIPATH\fR]
 .br
 List objects in current path.
 .br
@@ -158,6 +159,12 @@ show this help message and exit
 .TP
 \fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
 what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
 
 .SH LOGGING OPTIONS
 .TP
@@ -182,7 +189,7 @@ save every response
 filter result items to display given a boolean expression
 .TP
 \fB\-n COUNT\fR, \fB\-\-count=COUNT\fR
-get a maximum number of results (all backends merged)
+limit number of results (from each backends)
 .TP
 \fB\-s SELECT\fR, \fB\-\-select=SELECT\fR
 select result item keys to display (comma separated)
@@ -190,8 +197,8 @@ select result item keys to display (comma separated)
 .SH FORMATTING OPTIONS
 .TP
 \fB\-f FORMATTER\fR, \fB\-\-formatter=FORMATTER\fR
-select output formatter (csv, htmltable, multiline, rented_list, simple, table,
-webkit)
+select output formatter (csv, htmltable, json, multiline, rented_list, simple,
+table, webkit)
 .TP
 \fB\-\-no\-header\fR
 do not display header

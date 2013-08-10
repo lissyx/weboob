@@ -27,8 +27,8 @@ __all__ = ['PluzzVideo']
 class PluzzVideo(BaseVideo):
     def __init__(self, *args, **kwargs):
         BaseVideo.__init__(self, *args, **kwargs)
-        self.ext = 'wmv'
+        self.ext = u'wmv'
 
     @classmethod
     def id2url(cls, _id):
-        return 'http://www.pluzz.fr/%s.html' % _id
+        return 'http://pluzz.francetv.fr/videos/%s.html' % _id

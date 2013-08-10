@@ -19,7 +19,12 @@
 
 
 import hashlib
-import Image
+import tempfile
+
+try:
+    from PIL import Image
+except ImportError:
+    raise ImportError('Please install python-imaging')
 
 
 class VirtKeyboardError(Exception):
@@ -28,19 +33,23 @@ class VirtKeyboardError(Exception):
 
 
 class VirtKeyboard(object):
-    def __init__(self, file, coords, color):
+    def __init__(self, file, coords, color, convert=None):
         # file: virtual keyboard image
         # coords: dictionary <value to return>:<tuple(x1,y1,x2,y2)>
         # color: color of the symbols in the image
         #        depending on the image, it can be a single value or a tuple
+        # convert: if not None, convert image to this target type (for example 'RGB')
         img = Image.open(file)
+
+        if convert is not None:
+            img = img.convert(convert)
 
         self.bands = img.getbands()
         if isinstance(color, int) and not isinstance(self.bands, str) and len(self.bands) != 1:
-            raise VirtKeyboardError("Color requires %i component but only 1 is provided" \
+            raise VirtKeyboardError("Color requires %i component but only 1 is provided"
                                     % len(self.bands))
         if not isinstance(color, int) and len(color) != len(self.bands):
-            raise VirtKeyboardError("Color requires %i components but %i are provided" \
+            raise VirtKeyboardError("Color requires %i components but %i are provided"
                                     % (len(self.bands), len(color)))
         self.color = color
 
@@ -55,13 +64,16 @@ class VirtKeyboard(object):
             self.coords[i] = coord
             self.md5[i] = self.checksum(self.coords[i])
 
+    def check_color(self, pixel):
+        return pixel == self.color
+
     def get_symbol_coords(self, (x1, y1, x2, y2)):
         newY1 = -1
         newY2 = -1
         for y in range(y1, min(y2 + 1, self.height)):
             empty_line = True
             for x in range(x1, min(x2 + 1, self.width)):
-                if self.pixar[x, y] == self.color:
+                if self.check_color(self.pixar[x, y]):
                     empty_line = False
                     if newY1 == -1:
                         newY1 = y
@@ -75,7 +87,7 @@ class VirtKeyboard(object):
         for x in range(x1, min(x2 + 1, self.width)):
             empty_column = True
             for y in range(y1, min(y2 + 1, self.height)):
-                if self.pixar[x, y] == self.color:
+                if self.check_color(self.pixar[x, y]):
                     empty_column = False
                     if newX1 == -1:
                         newX1 = x
@@ -90,7 +102,7 @@ class VirtKeyboard(object):
         s = ''
         for y in range(y1, min(y2 + 1, self.height)):
             for x in range(x1, min(x2 + 1, self.width)):
-                if self.pixar[x, y] == self.color:
+                if self.check_color(self.pixar[x, y]):
                     s += "."
                 else:
                     s += " "
@@ -108,8 +120,10 @@ class VirtKeyboard(object):
             try:
                 self.get_symbol_code(symbols[s])
             except VirtKeyboardError:
+                if dirname is None:
+                    dirname = tempfile.mkdtemp(prefix='weboob_session_')
                 self.generate_MD5(dirname)
-                raise VirtKeyboardError("Symbol '%s' not found; all symbol hashes are available in %s"\
+                raise VirtKeyboardError("Symbol '%s' not found; all symbol hashes are available in %s"
                                         % (s, dirname))
 
     def generate_MD5(self, dir):
@@ -125,7 +139,7 @@ class VirtKeyboard(object):
 
 
 class MappedVirtKeyboard(VirtKeyboard):
-    def __init__(self, file, document, img_element, color, map_attr="onclick"):
+    def __init__(self, file, document, img_element, color, map_attr="onclick", convert=None):
         map_id = img_element.attrib.get("usemap")[1:]
         map = document.find("//map[@id='" + map_id + "']")
         if map is None:
@@ -139,4 +153,4 @@ class MappedVirtKeyboard(VirtKeyboard):
                 area_coords.append(int(coord))
             coords[code] = tuple(area_coords)
 
-        VirtKeyboard.__init__(self, file, coords, color)
+        VirtKeyboard.__init__(self, file, coords, color, convert)

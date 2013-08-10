@@ -20,10 +20,12 @@
 
 from decimal import Decimal
 import datetime
+import re
 
 from weboob.capabilities.bank import Transaction
 from weboob.capabilities import NotAvailable
 from weboob.tools.misc import to_unicode
+from weboob.tools.log import getLogger
 
 
 __all__ = ['FrenchTransaction']
@@ -35,12 +37,17 @@ class FrenchTransaction(Transaction):
     """
     PATTERNS = []
 
-    def clean_amount(self, text):
+    def __init__(self, *args, **kwargs):
+        Transaction.__init__(self, *args, **kwargs)
+        self._logger = getLogger('FrenchTransaction')
+
+    @classmethod
+    def clean_amount(klass, text):
         """
         Clean a string containing an amount.
         """
-        return text.replace(' ', '').replace('.','').replace(u'\xa0', '') \
-                   .replace(',','.').strip(u' \t\u20ac\xa0\x80€\n\r')
+        text = text.replace('.','').replace(',','.')
+        return re.sub(u'[^\d\-\.]', '', text)
 
     def set_amount(self, credit='', debit=''):
         """
@@ -54,10 +61,29 @@ class FrenchTransaction(Transaction):
 
         if len(debit) > 0:
             self.amount = - abs(Decimal(debit))
-        else:
+        elif len(credit) > 0:
             self.amount = Decimal(credit)
+        else:
+            self.amount = Decimal('0')
 
-    def parse(self, date, raw):
+    def parse_date(self, date):
+        if date is None:
+            return NotAvailable
+
+        if not isinstance(date, (datetime.date, datetime.datetime)):
+            if date.isdigit() and len(date) == 8:
+                date = datetime.date(int(date[4:8]), int(date[2:4]), int(date[0:2]))
+            elif '/' in date:
+                date = datetime.date(*reversed([int(x) for x in date.split('/')]))
+        if not isinstance(date, (datetime.date, datetime.datetime)):
+            self._logger.warning('Unable to parse date %r' % date)
+            date = NotAvailable
+        elif date.year < 100:
+            date = date.replace(year=2000 + date.year)
+
+        return date
+
+    def parse(self, date, raw, vdate=None):
         """
         Parse date and raw strings to create datetime.date objects,
         determine the type of transaction, and create a simplified label
@@ -78,14 +104,9 @@ class FrenchTransaction(Transaction):
             * category: part of label representing the category
             * yy, mm, dd, HH, MM: date and time parts
         """
-        if not isinstance(date, (datetime.date, datetime.datetime)):
-            if date.isdigit() and len(date) == 8:
-                date = datetime.date(int(date[4:8]), int(date[2:4]), int(date[0:2]))
-            elif '/' in date:
-                date = datetime.date(*reversed([int(x) for x in date.split('/')]))
-
-        self.date = date
-        self.rdate = date
+        self.date = self.parse_date(date)
+        self.vdate = self.parse_date(vdate)
+        self.rdate = self.date
         self.raw = to_unicode(raw.replace(u'\n', u' ').strip())
         self.category = NotAvailable
 
@@ -98,36 +119,47 @@ class FrenchTransaction(Transaction):
             m = pattern.match(self.raw)
             if m:
                 args = m.groupdict()
+
+                def inargs(key):
+                    """
+                    inner function to check if a key is in args,
+                    and is not None.
+                    """
+                    return args.get(key, None) is not None
+
                 self.type = _type
-                if 'text' in args:
+                if inargs('text'):
                     self.label = args['text'].strip()
-                if 'category' in args:
+                if inargs('category'):
                     self.category = args['category'].strip()
 
                 # Set date from information in raw label.
-                if 'dd' and 'mm' in args:
+                if inargs('dd') and inargs('mm'):
                     dd = int(args['dd'])
                     mm = int(args['mm'])
 
-                    if 'yy' in args:
+                    if inargs('yy'):
                         yy = int(args['yy'])
                     else:
-                        d = datetime.date.today()
+                        d = self.date
                         try:
                             d = d.replace(month=mm, day=dd)
                         except ValueError:
                             d = d.replace(year=d.year-1, month=mm, day=dd)
 
                         yy = d.year
-                        if d > datetime.date.today():
+                        if d > self.date:
                             yy -= 1
 
                     if yy < 100:
                         yy += 2000
 
-                    if 'HH' in args and 'MM' in args:
-                        self.rdate = datetime.datetime(yy, mm, dd, int(args['HH']), int(args['MM']))
-                    else:
-                        self.rdate = datetime.date(yy, mm, dd)
+                    try:
+                        if inargs('HH') and inargs('MM'):
+                            self.rdate = datetime.datetime(yy, mm, dd, int(args['HH']), int(args['MM']))
+                        else:
+                            self.rdate = datetime.date(yy, mm, dd)
+                    except ValueError as e:
+                        self._logger.warning('Unable to date in label %r: %s' % (self.raw, e))
 
                 return

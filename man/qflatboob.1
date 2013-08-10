@@ -1,6 +1,7 @@
-.TH QFLATBOOB 1 "04 May 2012" "qflatboob 0\&.c"
+.\" -*- coding: utf-8 -*-
+.TH QFLATBOOB 1 "03 August 2013" "qflatboob 0\&.g"
 .SH NAME
-qflatboob
+qflatboob \- search for housing
 .SH SYNOPSIS
 .B qflatboob
 [\-h] [\-dqv] [\-b \fIbackends\fR] ...
@@ -11,7 +12,7 @@ qflatboob
 .SH DESCRIPTION
 .LP
 
-Qt application to find housings.
+Qt application to search for housing.
 
 .SS Supported websites:
 * pap (French housing website)
@@ -27,6 +28,12 @@ show this help message and exit
 .TP
 \fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
 what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
 
 .SH LOGGING OPTIONS
 .TP

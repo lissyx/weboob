@@ -18,6 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
+
 from copy import copy
 import getpass
 import logging
@@ -25,17 +26,18 @@ import sys
 import os
 import locale
 from tempfile import NamedTemporaryFile
+from ssl import SSLError
 
 from weboob.capabilities import UserError
 from weboob.capabilities.account import ICapAccount, Account, AccountRegisterError
 from weboob.core.backendscfg import BackendAlreadyExists
 from weboob.core.modules import ModuleLoadError
 from weboob.core.repositories import ModuleInstallError
-from weboob.tools.browser import BrowserUnavailable, BrowserIncorrectPassword
+from weboob.tools.browser import BrowserUnavailable, BrowserIncorrectPassword, BrowserForbidden
 from weboob.tools.value import Value, ValueBool, ValueFloat, ValueInt
 from weboob.tools.misc import to_unicode
 
-from .base import BaseApplication
+from .base import BaseApplication, MoreResultsAvailable
 
 
 __all__ = ['ConsoleApplication', 'BackendNotGiven']
@@ -48,8 +50,10 @@ class BackendNotGiven(Exception):
         Exception.__init__(self, 'Please specify a backend to use for this argument (%s@backend_name). '
                 'Availables: %s.' % (id, ', '.join(name for name, backend in backends)))
 
+
 class BackendNotFound(Exception):
     pass
+
 
 class ConsoleApplication(BaseApplication):
     """
@@ -59,7 +63,9 @@ class ConsoleApplication(BaseApplication):
     CAPS = None
 
     # shell escape strings
-    if sys.platform == 'win32':
+    if sys.platform == 'win32' \
+            or not os.isatty(sys.stdout.fileno()) \
+            or os.getenv('ANSI_COLORS_DISABLED') is not None:
         #workaround to disable bold
         BOLD   = ''
         NC     = ''          # no color
@@ -184,13 +190,16 @@ class ConsoleApplication(BaseApplication):
 
         Applications can overload this method to restrict backends loaded.
         """
-        self.load_backends(self.CAPS)
+        if len(self.STORAGE) > 0:
+            self.load_backends(self.CAPS, storage=self.create_storage())
+        else:
+            self.load_backends(self.CAPS)
 
     @classmethod
     def run(klass, args=None):
         try:
             super(ConsoleApplication, klass).run(args)
-        except BackendNotFound, e:
+        except BackendNotFound as e:
             print 'Error: Backend "%s" not found.' % e
             sys.exit(1)
 
@@ -219,7 +228,7 @@ class ConsoleApplication(BaseApplication):
     def register_backend(self, name, ask_add=True):
         try:
             backend = self.weboob.modules_loader.get_or_load_module(name)
-        except ModuleLoadError, e:
+        except ModuleLoadError as e:
             backend = None
 
         if not backend:
@@ -236,7 +245,7 @@ class ConsoleApplication(BaseApplication):
             website = 'on website %s' % backend.website
         else:
             website = 'with backend %s' % backend.name
-        while 1:
+        while True:
             asked_config = False
             for key, prop in backend.klass.ACCOUNT_REGISTER_PROPERTIES.iteritems():
                 if not asked_config:
@@ -250,7 +259,7 @@ class ConsoleApplication(BaseApplication):
                 print '-----------------------------%s' % ('-' * len(website))
             try:
                 backend.klass.register_account(account)
-            except AccountRegisterError, e:
+            except AccountRegisterError as e:
                 print u'%s' % e
                 if self.ask('Do you want to try again?', default=True):
                     continue
@@ -271,7 +280,7 @@ class ConsoleApplication(BaseApplication):
     def install_module(self, name):
         try:
             self.weboob.repositories.install(name)
-        except ModuleInstallError, e:
+        except ModuleInstallError as e:
             print >>sys.stderr, 'Unable to install module "%s": %s' % (name, e)
             return False
 
@@ -303,7 +312,7 @@ class ConsoleApplication(BaseApplication):
                 items.update(params)
                 params = items
                 config = module.config.load(self.weboob, bname, name, params, nofail=True)
-        except ModuleLoadError, e:
+        except ModuleLoadError as e:
             print >>sys.stderr, 'Unable to load module "%s": %s' % (name, e)
             return 1
 
@@ -332,6 +341,8 @@ class ConsoleApplication(BaseApplication):
         try:
             config = config.load(self.weboob, module.name, name, params, nofail=True)
             for key, value in params.iteritems():
+                if key.startswith('_'):
+                    continue
                 config[key].set(value)
             config.save(edit=edit)
             print 'Backend "%s" successfully added.' % name
@@ -340,7 +351,7 @@ class ConsoleApplication(BaseApplication):
             print >>sys.stderr, 'Backend "%s" already exists.' % name
             return 1
 
-    def ask(self, question, default=None, masked=False, regexp=None, choices=None):
+    def ask(self, question, default=None, masked=False, regexp=None, choices=None, tiny=None):
         """
         Ask a question to user.
 
@@ -349,6 +360,7 @@ class ConsoleApplication(BaseApplication):
         @param masked  if True, do not show typed text (bool)
         @param regexp  text must match this regexp (str)
         @param choices  choices to do (list)
+        @param tiny  ask for the (small) value of the choice (bool)
         @return  entered text by user (str)
         """
 
@@ -362,6 +374,8 @@ class ConsoleApplication(BaseApplication):
                 v.regexp = regexp
             if choices:
                 v.choices = choices
+            if tiny:
+                v.tiny = tiny
         else:
             if isinstance(default, bool):
                 klass = ValueBool
@@ -372,7 +386,7 @@ class ConsoleApplication(BaseApplication):
             else:
                 klass = Value
 
-            v = klass(label=question, default=default, masked=masked, regexp=regexp, choices=choices)
+            v = klass(label=question, default=default, masked=masked, regexp=regexp, choices=choices, tiny=tiny)
 
         question = v.label
         if v.id:
@@ -382,15 +396,18 @@ class ConsoleApplication(BaseApplication):
         if isinstance(v, ValueBool):
             question = u'%s (%s/%s)' % (question, 'Y' if v.default else 'y', 'n' if v.default else 'N')
         elif v.choices:
-            tiny = True
-            for key in v.choices.iterkeys():
-                if len(key) > 5 or ' ' in key:
-                    tiny = False
-                    break
+            if v.tiny is None:
+                v.tiny = True
+                for key in v.choices.iterkeys():
+                    if len(key) > 5 or ' ' in key:
+                        v.tiny = False
+                        break
 
-            if tiny:
+            if v.tiny:
                 question = u'%s (%s)' % (question, '/'.join((s.upper() if s == v.default else s)
                                                             for s in (v.choices.iterkeys())))
+                for key, value in v.choices.iteritems():
+                    print '%s%s%s: %s' % (self.BOLD, key, self.NC, value)
             else:
                 for n, (key, value) in enumerate(v.choices.iteritems()):
                     print '%s%2d)%s %s' % (self.BOLD, n + 1, self.NC, value)
@@ -429,7 +446,7 @@ class ConsoleApplication(BaseApplication):
 
             try:
                 v.set(line)
-            except ValueError, e:
+            except ValueError as e:
                 print >>sys.stderr, u'Error: %s' % e
             else:
                 break
@@ -437,18 +454,16 @@ class ConsoleApplication(BaseApplication):
         return v.get()
 
     def acquire_input(self, content=None):
-        editor = os.environ.get('EDITOR')
+        editor = os.getenv('EDITOR', 'vi')
         if sys.stdin.isatty() and editor:
-            f = NamedTemporaryFile(delete=False)
-            filename = f.name
-            if content is not None:
-                f.write(content)
-            f.close()
-            os.system("%s %s" % (editor, filename))
-            f = open(filename, 'r')
-            text = f.read()
-            f.close()
-            os.unlink(filename)
+            with NamedTemporaryFile() as f:
+                filename = f.name
+                if content is not None:
+                    f.write(content)
+                    f.flush()
+                os.system("%s %s" % (editor, filename))
+                f.seek(0)
+                text = f.read()
         else:
             if sys.stdin.isatty():
                 print 'Reading content from stdin... Type ctrl-D ' \
@@ -466,7 +481,6 @@ class ConsoleApplication(BaseApplication):
             msg = unicode(error)
             if not msg:
                 msg = 'invalid login/password.'
-            # TODO ask to reconfigure backend
             print >>sys.stderr, 'Error(%s): %s' % (backend.name, msg)
             if self.ask('Do you want to reconfigure this backend?', default=True):
                 self.unload_backends(names=[backend.name])
@@ -477,12 +491,18 @@ class ConsoleApplication(BaseApplication):
             if not msg:
                 msg = 'website is unavailable.'
             print >>sys.stderr, u'Error(%s): %s' % (backend.name, msg)
+        elif isinstance(error, BrowserForbidden):
+            print >>sys.stderr, u'Error(%s): %s' % (backend.name, msg or 'Forbidden')
         elif isinstance(error, NotImplementedError):
             print >>sys.stderr, u'Error(%s): this feature is not supported yet by this backend.' % backend.name
             print >>sys.stderr, u'      %s   To help the maintainer of this backend implement this feature,' % (' ' * len(backend.name))
             print >>sys.stderr, u'      %s   please contact: %s <%s>' % (' ' * len(backend.name), backend.MAINTAINER, backend.EMAIL)
         elif isinstance(error, UserError):
             print >>sys.stderr, u'Error(%s): %s' % (backend.name, to_unicode(error))
+        elif isinstance(error, MoreResultsAvailable):
+            print >>sys.stderr, u'Hint: There are more results for backend %s' % (backend.name)
+        elif isinstance(error, SSLError):
+            print >>sys.stderr, u'FATAL(%s): ' % backend.name + self.BOLD + '/!\ SERVER CERTIFICATE IS INVALID /!\\' + self.NC
         else:
             print >>sys.stderr, u'Bug(%s): %s' % (backend.name, to_unicode(error))
 
@@ -503,14 +523,21 @@ class ConsoleApplication(BaseApplication):
             else:
                 return True
 
-    def bcall_errors_handler(self, errors, debugmsg='Use --debug option to print backtraces'):
+    def bcall_errors_handler(self, errors, debugmsg='Use --debug option to print backtraces', ignore=()):
         """
         Handler for the CallErrors exception.
         """
         ask_debug_mode = False
+        more_results = set()
         for backend, error, backtrace in errors.errors:
-            if self.bcall_error_handler(backend, error, backtrace):
+            if isinstance(error, MoreResultsAvailable):
+                more_results.add(backend.name)
+            elif isinstance(error, ignore):
+                continue
+            elif self.bcall_error_handler(backend, error, backtrace):
                 ask_debug_mode = True
 
         if ask_debug_mode:
             print >>sys.stderr, debugmsg
+        elif len(more_results) > 0:
+            print >>sys.stderr, 'Hint: There are more results available for %s (use option -n or count command)' % (', '.join(more_results))

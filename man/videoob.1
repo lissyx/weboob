@@ -1,6 +1,7 @@
-.TH VIDEOOB 1 "04 May 2012" "videoob 0\&.c"
+.\" -*- coding: utf-8 -*-
+.TH VIDEOOB 1 "03 August 2013" "videoob 0\&.g"
 .SH NAME
-videoob
+videoob \- search and play videos
 .SH SYNOPSIS
 .B videoob
 [\-dqv] [\-b \fIbackends\fR] [\-cnfs] [\fIcommand\fR [\fIarguments\fR..]]
@@ -14,6 +15,8 @@ videoob
 Console application allowing to search for videos on various websites, play and download them and get information.
 
 .SS Supported websites:
+* arretsurimages (arretsurimages website)
+.br
 * arte (Arte French and German TV)
 .br
 * canalplus (Canal Plus French TV)
@@ -22,13 +25,23 @@ Console application allowing to search for videos on various websites, play and 
 .br
 * dailymotion (Dailymotion video streaming website)
 .br
+* europarl (Europarl parliamentary video streaming website)
+.br
 * francetelevisions (France Télévisions video website)
+.br
+* gdcvault (Game Developers Conferences Vault video streaming website)
+.br
+* grooveshark (grooveshark website)
 .br
 * ina (INA French TV video archives)
 .br
 * nolifetv (NolifeTV French video streaming website)
 .br
 * radiofrance (Radios of Radio France: Inter, Info, Bleu, Culture, Musique, FIP, Le Mouv')
+.br
+* trictractv (TricTrac.tv video website)
+.br
+* vimeo (Vimeo video streaming website)
 .br
 * youjizz (YouJizz pornographic video streaming website)
 .br
@@ -60,6 +73,10 @@ Play a video with a found player.
 \fBsearch\fR \fIPATTERN\fR
 .br
 Search for videos matching a PATTERN.
+.br
+
+.br
+Default is limited to 10 results.
 .SH WEBOOB COMMANDS
 .TP
 \fBbackends\fR [\fIACTION\fR] [\fIBACKEND_NAME\fR]...
@@ -164,7 +181,7 @@ Availables: debug, info, warning, error.
 .br
 * default is an alias for warning
 .TP
-\fBls\fR [\fIPATH\fR]
+\fBls\fR [\-d] [\fIPATH\fR]
 .br
 List objects in current path.
 .br
@@ -196,6 +213,12 @@ show this help message and exit
 .TP
 \fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
 what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
 
 .SH LOGGING OPTIONS
 .TP
@@ -220,7 +243,7 @@ save every response
 filter result items to display given a boolean expression
 .TP
 \fB\-n COUNT\fR, \fB\-\-count=COUNT\fR
-get a maximum number of results (all backends merged)
+limit number of results (from each backends)
 .TP
 \fB\-s SELECT\fR, \fB\-\-select=SELECT\fR
 select result item keys to display (comma separated)
@@ -228,8 +251,8 @@ select result item keys to display (comma separated)
 .SH FORMATTING OPTIONS
 .TP
 \fB\-f FORMATTER\fR, \fB\-\-formatter=FORMATTER\fR
-select output formatter (csv, htmltable, multiline, simple, table, video_list,
-webkit)
+select output formatter (csv, htmltable, json, multiline, simple, table,
+video_list, webkit)
 .TP
 \fB\-\-no\-header\fR
 do not display header

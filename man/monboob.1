@@ -1,6 +1,7 @@
-.TH MONBOOB 1 "04 May 2012" "monboob 0\&.c"
+.\" -*- coding: utf-8 -*-
+.TH MONBOOB 1 "03 August 2013" "monboob 0\&.g"
 .SH NAME
-monboob
+monboob \- daemon to send and check messages
 .SH SYNOPSIS
 .B monboob
 [\-dqv] [\-b \fIbackends\fR] [\-cnfs] [\fIcommand\fR [\fIarguments\fR..]]
@@ -27,6 +28,8 @@ Daemon allowing to regularly check for new messages on various websites, and sen
 * fourchan (4chan image board)
 .br
 * hds (Histoires de Sexe French erotic novels)
+.br
+* hellobank (Hello Bank ! website)
 .br
 * inrocks (Les Inrocks French news website)
 .br
@@ -71,6 +74,12 @@ show this help message and exit
 .TP
 \fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
 what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
 
 .SH MONBOOB OPTIONS
 .TP
@@ -100,7 +109,7 @@ save every response
 filter result items to display given a boolean expression
 .TP
 \fB\-n COUNT\fR, \fB\-\-count=COUNT\fR
-get a maximum number of results (all backends merged)
+limit number of results (from each backends)
 .TP
 \fB\-s SELECT\fR, \fB\-\-select=SELECT\fR
 select result item keys to display (comma separated)
@@ -108,7 +117,7 @@ select result item keys to display (comma separated)
 .SH FORMATTING OPTIONS
 .TP
 \fB\-f FORMATTER\fR, \fB\-\-formatter=FORMATTER\fR
-select output formatter (csv, htmltable, multiline, simple, table, webkit)
+select output formatter (csv, htmltable, json, multiline, simple, table, webkit)
 .TP
 \fB\-\-no\-header\fR
 do not display header

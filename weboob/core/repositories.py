@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 import imp
 import tarfile
@@ -41,8 +41,9 @@ from weboob.tools.browser import StandardBrowser, BrowserUnavailable
 from ConfigParser import RawConfigParser, DEFAULTSECT
 
 
-__all__ = ['IProgress', 'ModuleInstallError', 'ModuleInfo', 'RepositoryUnavailable', \
+__all__ = ['IProgress', 'ModuleInstallError', 'ModuleInfo', 'RepositoryUnavailable',
            'Repository', 'Versions', 'Repositories', 'InvalidSignature', 'Keyring']
+
 
 class WeboobBrowser(StandardBrowser):
     """
@@ -52,6 +53,7 @@ class WeboobBrowser(StandardBrowser):
     @classmethod
     def set_version(klass, version):
         klass.USER_AGENT = 'weboob/%s' % version
+
 
 class ModuleInfo(object):
     """
@@ -108,10 +110,12 @@ class ModuleInfo(object):
                 ('urls', self.urls),
                )
 
+
 class RepositoryUnavailable(Exception):
     """
     Repository in not available.
     """
+
 
 class Repository(object):
     """
@@ -149,7 +153,7 @@ class Repository(object):
         """
         Get a local path of a file:// URL.
         """
-        assert self.local == True
+        assert self.local is True
 
         if self.url.startswith('file://'):
             return self.url[len('file://'):]
@@ -168,7 +172,7 @@ class Repository(object):
             filename = os.path.join(self.localurl2path(), self.INDEX)
             try:
                 fp = open(filename, 'r')
-            except IOError, e:
+            except IOError as e:
                 # This local repository doesn't contain a built modules.list index.
                 self.name = Repositories.url2filename(self.url)
                 self.build_index(self.localurl2path(), filename)
@@ -178,7 +182,7 @@ class Repository(object):
             browser = WeboobBrowser()
             try:
                 fp = browser.openurl(posixpath.join(self.url, self.INDEX))
-            except BrowserUnavailable, e:
+            except BrowserUnavailable as e:
                 raise RepositoryUnavailable(unicode(e))
 
         self.parse_index(fp)
@@ -208,7 +212,7 @@ class Repository(object):
             try:
                 keyring_data = browser.readurl(posixpath.join(self.url, self.KEYRING))
                 sig_data = browser.readurl(posixpath.join(self.url, self.KEYRING + '.sig'))
-            except BrowserUnavailable, e:
+            except BrowserUnavailable as e:
                 raise RepositoryUnavailable(unicode(e))
             if keyring.exists():
                 if not keyring.is_valid(keyring_data, sig_data):
@@ -237,9 +241,9 @@ class Repository(object):
             self.maintainer = items['maintainer']
             self.signed = bool(int(items.get('signed', '0')))
             self.key_update = int(items.get('key_update', '0'))
-        except KeyError, e:
+        except KeyError as e:
             raise RepositoryUnavailable('Missing global parameters in repository: %s' % e)
-        except ValueError, e:
+        except ValueError as e:
             raise RepositoryUnavailable('Incorrect value in repository parameters: %s' % e)
 
         if len(self.name) == 0:
@@ -293,7 +297,7 @@ class Repository(object):
                 finally:
                     if fp:
                         fp.close()
-            except Exception, e:
+            except Exception as e:
                 print >>sys.stderr, 'Unable to build module %s: [%s] %s' % (name, type(e).__name__, e)
             else:
                 m = ModuleInfo(module.name)
@@ -348,6 +352,7 @@ class Repository(object):
         with open(filename, 'wb') as f:
             config.write(f)
 
+
 class Versions(object):
     VERSIONS_LIST = 'versions.list'
 
@@ -380,6 +385,7 @@ class Versions(object):
         with open(os.path.join(self.path, self.VERSIONS_LIST), 'wb') as fp:
             config.write(fp)
 
+
 class IProgress(object):
     def progress(self, percent, message):
         print '=== [%3.0f%%] %s' % (percent*100, message)
@@ -387,8 +393,10 @@ class IProgress(object):
     def error(self, message):
         print >>sys.stderr, 'ERROR: %s' % message
 
+
 class ModuleInstallError(Exception):
     pass
+
 
 DEFAULT_SOURCES_LIST = \
 """# List of Weboob repositories
@@ -403,6 +411,7 @@ http://updates.weboob.org/%(version)s/main/
 # reference to sources, for example:
 #file:///home/rom1/src/weboob/modules/
 """
+
 
 class Repositories(object):
     SOURCES_LIST = 'sources.list'
@@ -421,7 +430,7 @@ class Repositories(object):
         self.workdir = workdir
         self.datadir = datadir
         self.sources_list = os.path.join(self.workdir, self.SOURCES_LIST)
-        self.modules_dir = os.path.join(self.datadir, self.MODULES_DIR)
+        self.modules_dir = os.path.join(self.datadir, self.MODULES_DIR, self.version)
         self.repos_dir = os.path.join(self.datadir, self.REPOS_DIR)
         self.keyrings_dir = os.path.join(self.datadir, self.KEYRINGS_DIR)
         self.icons_dir = os.path.join(self.datadir, self.ICONS_DIR)
@@ -488,19 +497,23 @@ class Repositories(object):
 
     def load(self):
         """
-        Load repositories from ~/.weboob/repositories/.
+        Load repositories from ~/.local/share/weboob/repositories/.
         """
         self.repositories = []
         for name in sorted(os.listdir(self.repos_dir)):
-            repository = Repository(os.path.join(self.repos_dir, name))
-            self.repositories.append(repository)
+            path = os.path.join(self.repos_dir, name)
+            try:
+                repository = Repository(path)
+                self.repositories.append(repository)
+            except RepositoryUnavailable as e:
+                print >>sys.stderr, 'Unable to load repository %s (%s), try to update repositories.' % (name, e)
 
     def get_module_icon_path(self, module):
         return os.path.join(self.icons_dir, '%s.png' % module.name)
 
     def retrieve_icon(self, module):
         """
-        Retrieve the icon of a module and save it in ~/.weboob/icons/.
+        Retrieve the icon of a module and save it in ~/.local/share/weboob/icons/.
         """
         if not isinstance(module, ModuleInfo):
             module = self.get_module_info(module)
@@ -521,15 +534,25 @@ class Repositories(object):
         try:
             icon = browser.openurl(icon_url)
         except BrowserUnavailable:
-            pass # no icon, no problem
+            pass  # no icon, no problem
         else:
             with open(dest_path, 'wb') as fp:
                 fp.write(icon.read())
 
+    def _parse_source_list(self):
+        l = []
+        with open(self.sources_list, 'r') as f:
+            for line in f:
+                line = line.strip() % {'version': self.version}
+                m = re.match('(file|https?)://.*', line)
+                if m:
+                    l.append(line)
+        return l
+
     def update_repositories(self, progress=IProgress()):
         """
         Update list of repositories by downloading them
-        and put them in ~/.weboob/repositories/.
+        and put them in ~/.local/share/weboob/repositories/.
 
         :param progress: observer object.
         :type progress: :class:`IProgress`
@@ -539,28 +562,39 @@ class Repositories(object):
             os.remove(os.path.join(self.repos_dir, name))
 
         gpgv = Keyring.find_gpgv()
-        with open(self.sources_list, 'r') as f:
-            for line in f.xreadlines():
-                line = line.strip() % {'version': self.version}
-                m = re.match('(file|https?)://.*', line)
-                if m:
-                    progress.progress(0.0, 'Getting %s' % line)
-                    repository = Repository(line)
-                    filename = self.url2filename(repository.url)
-                    prio_filename = '%02d-%s' % (len(self.repositories), filename)
-                    repo_path = os.path.join(self.repos_dir, prio_filename)
-                    keyring_path = os.path.join(self.keyrings_dir, filename)
-                    try:
-                        repository.retrieve_index(repo_path)
-                        if gpgv:
-                            repository.retrieve_keyring(keyring_path)
-                        else:
-                            progress.error('Cannot find gpgv to check for repository authenticity.\n'
-                                           'You should install GPG for better security.')
-                    except RepositoryUnavailable, e:
-                        progress.error('Unable to load repository: %s' % e)
-                    else:
-                        self.repositories.append(repository)
+        for line in self._parse_source_list():
+            progress.progress(0.0, 'Getting %s' % line)
+            repository = Repository(line)
+            filename = self.url2filename(repository.url)
+            prio_filename = '%02d-%s' % (len(self.repositories), filename)
+            repo_path = os.path.join(self.repos_dir, prio_filename)
+            keyring_path = os.path.join(self.keyrings_dir, filename)
+            try:
+                repository.retrieve_index(repo_path)
+                if gpgv:
+                    repository.retrieve_keyring(keyring_path)
+                else:
+                    progress.error('Cannot find gpgv to check for repository authenticity.\n'
+                                    'You should install GPG for better security.')
+            except RepositoryUnavailable as e:
+                progress.error('Unable to load repository: %s' % e)
+            else:
+                self.repositories.append(repository)
+
+    def check_repositories(self):
+        """
+        Check if sources.list is consistent with repositories
+        """
+        l = []
+        for line in self._parse_source_list():
+            repository = Repository(line)
+            filename = self.url2filename(repository.url)
+            prio_filename = '%02d-%s' % (len(l), filename)
+            repo_path = os.path.join(self.repos_dir, prio_filename)
+            if not os.path.isfile(repo_path):
+                return False
+            l.append(repository)
+        return True
 
     def update(self, progress=IProgress()):
         """
@@ -587,7 +621,7 @@ class Repositories(object):
             inst_progress = InstallProgress(n)
             try:
                 self.install(info, inst_progress)
-            except ModuleInstallError, e:
+            except ModuleInstallError as e:
                 inst_progress.progress(1.0, unicode(e))
 
     def install(self, module, progress=IProgress()):
@@ -621,15 +655,14 @@ class Repositories(object):
         elif module.version > installed:
             progress.progress(0.3, 'A new version of %s is available' % module.name)
         else:
-            raise ModuleInstallError('The last version of %s is already installed' % module.name)
+            raise ModuleInstallError('The latest version of %s is already installed' % module.name)
 
         browser = WeboobBrowser()
         progress.progress(0.2, 'Downloading module...')
         try:
             tardata = browser.readurl(module.url)
-        except BrowserUnavailable, e:
+        except BrowserUnavailable as e:
             raise ModuleInstallError('Unable to fetch module: %s' % e)
-
 
         # Check signature
         if module.signed and Keyring.find_gpgv():
@@ -641,7 +674,6 @@ class Repositories(object):
                 raise ModuleInstallError('No keyring found, please update repos.')
             if not keyring.is_valid(tardata, sig_data):
                 raise ModuleInstallError('Invalid signature for %s.' % module.name)
-
 
         # Extract module from tarball.
         if os.path.isdir(module_dir):

@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 import time
 import datetime
@@ -38,13 +38,14 @@ from .browser import OkCBrowser
 
 __all__ = ['OkCBackend']
 
+
 def parse_dt(s):
     now = datetime.datetime.now()
     if s is None:
-       return local2utc(now)
-    if 'minutes ago' in  s:
-       m = int(s.split()[0])
-       d = now - datetime.timedelta(minutes=m)
+        return local2utc(now)
+    if 'minutes ago' in s:
+        m = int(s.split()[0])
+        d = now - datetime.timedelta(minutes=m)
     elif u'–' in s:
         # Date in form : "Yesterday – 20:45"
         day, hour = s.split(u'–')
@@ -62,11 +63,12 @@ def parse_dt(s):
         d = _parse_dt(s)
     return local2utc(d)
 
+
 class OkCBackend(BaseBackend, ICapMessages, ICapContact, ICapMessagesPost):
     NAME = 'okc'
-    MAINTAINER = 'Roger Philibert'
+    MAINTAINER = u'Roger Philibert'
     EMAIL = 'roger.philibert@gmail.com'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = u'OkCupid dating website'
     CONFIG = BackendConfig(Value('username',                label='Username'),
@@ -196,7 +198,7 @@ class OkCBackend(BaseBackend, ICapMessages, ICapContact, ICapMessagesPost):
     #                    if m.flags & m.IS_UNREAD:
     #                        yield m
 
-    #    except BrowserUnavailable, e:
+    #    except BrowserUnavailable as e:
     #        self.logger.debug('No messages, browser is unavailable: %s' % e)
     #        pass # don't care about waiting
 

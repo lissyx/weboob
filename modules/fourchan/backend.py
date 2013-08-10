@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.messages import ICapMessages, Message, Thread
 from weboob.tools.backend import BaseBackend, BackendConfig
@@ -32,9 +32,9 @@ __all__ = ['FourChanBackend']
 
 class FourChanBackend(BaseBackend, ICapMessages):
     NAME = 'fourchan'
-    MAINTAINER = 'Romain Bignon'
+    MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = '4chan image board'
     CONFIG = BackendConfig(Value('boards', label='Boards to fetch'))

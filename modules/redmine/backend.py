@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.content import ICapContent, Content
 from weboob.capabilities.bugtracker import ICapBugTracker, Issue, Project, User, \
@@ -37,9 +37,9 @@ __all__ = ['RedmineBackend']
 
 class RedmineBackend(BaseBackend, ICapContent, ICapBugTracker, ICapCollection):
     NAME = 'redmine'
-    MAINTAINER = 'Romain Bignon'
+    MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'The Redmine project management web application'
     LICENSE = 'AGPLv3+'
     CONFIG = BackendConfig(Value('url',      label='URL of the Redmine website', regexp=r'https?://.*'),
@@ -57,7 +57,7 @@ class RedmineBackend(BaseBackend, ICapContent, ICapBugTracker, ICapCollection):
     def id2path(self, id):
         return id.split('/', 2)
 
-    def get_content(self, id):
+    def get_content(self, id, revision=None):
         if isinstance(id, basestring):
             content = Content(id)
         else:
@@ -69,8 +69,9 @@ class RedmineBackend(BaseBackend, ICapContent, ICapBugTracker, ICapCollection):
         except ValueError:
             return None
 
+        version = revision.id if revision else None
         with self.browser:
-            data = self.browser.get_wiki_source(project, page)
+            data = self.browser.get_wiki_source(project, page, version)
 
         content.content = data
         return content

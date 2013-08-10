@@ -26,6 +26,7 @@ from .pages import ForecastPage, WeatherPage, CityPage
 
 __all__ = ['WeatherBrowser']
 
+
 class WeatherBrowser(BaseBrowser):
     DOMAIN = 'www.weather.com'
     PROTOCOL = 'http'
@@ -35,12 +36,14 @@ class WeatherBrowser(BaseBrowser):
     SEARCH_URL = 'http://www.weather.com/search/enhancedlocalsearch?where=%s'
     WEATHER_URL = 'http://www.weather.com/weather/today/%s'
     FORECAST_URL = 'http://www.weather.com/weather/tenday/%s'
+    RIGHTNOW_URL = 'http://www.weather.com/weather/right-now/%s'
     USER_AGENT = BaseBrowser.USER_AGENTS['desktop_firefox']
 
     PAGES = {
         (SEARCH_URL.replace('.', '\\.').replace('?', '\\?') % '.*'): CityPage,
         (WEATHER_URL.replace('.', '\\.').replace('?', '\\?') % '.*'): WeatherPage,
         (FORECAST_URL.replace('.', '\\.').replace('?', '\\?') % '.*'): ForecastPage,
+        (RIGHTNOW_URL.replace('.', '\\.').replace('?', '\\?') % '.*'): WeatherPage,
         }
 
     def iter_city_search(self, pattern):

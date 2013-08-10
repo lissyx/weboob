@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright(C) 2010-2011 Christophe Benz, Romain Bignon
+# Copyright(C) 2010-2013 Christophe Benz, Romain Bignon, Julien Hebert
 #
 # This file is part of weboob.
 #
@@ -20,14 +20,16 @@
 
 import warnings
 import datetime
+import re
 from decimal import Decimal
 from copy import deepcopy, copy
 
 from weboob.tools.misc import to_unicode
+from weboob.tools.date import new_date, new_datetime
 from weboob.tools.ordereddict import OrderedDict
 
 
-__all__ = ['UserError', 'FieldNotFound', 'ObjectNotSupported', 'NotAvailable',
+__all__ = ['UserError', 'FieldNotFound', 'NotAvailable',
            'NotLoaded', 'IBaseCap', 'Field', 'IntField', 'DecimalField',
            'FloatField', 'StringField', 'BytesField', 'DateField',
            'DeltaField', 'empty', 'CapBaseObject']
@@ -51,12 +53,6 @@ class UserError(Exception):
     """
 
 
-class ObjectNotSupported(Exception):
-    """
-    This object is not supported.
-    """
-
-
 class FieldNotFound(Exception):
     """
     A field isn't found.
@@ -68,7 +64,8 @@ class FieldNotFound(Exception):
     """
     def __init__(self, obj, field):
         Exception.__init__(self,
-            u'Field "%s" not found for object %s' % (field, obj))
+                           u'Field "%s" not found for object %s' % (field, obj))
+
 
 class ConversionWarning(UserWarning):
     """
@@ -77,11 +74,13 @@ class ConversionWarning(UserWarning):
     """
     pass
 
+
 class AttributeCreationWarning(UserWarning):
     """
     A non-field attribute has been created with a name not
     prefixed with a _.
     """
+
 
 class NotAvailableMeta(type):
     def __str__(self):
@@ -164,6 +163,7 @@ class Field(object):
         """
         return value
 
+
 class IntField(Field):
     """
     A field which accepts only :class:`int` and :class:`long` types.
@@ -173,6 +173,7 @@ class IntField(Field):
 
     def convert(self, value):
         return int(value)
+
 
 class DecimalField(Field):
     """
@@ -186,6 +187,7 @@ class DecimalField(Field):
             return value
         return Decimal(value)
 
+
 class FloatField(Field):
     """
     A field which accepts only :class:`float` type.
@@ -196,6 +198,7 @@ class FloatField(Field):
     def convert(self, value):
         return float(value)
 
+
 class StringField(Field):
     """
     A field which accepts only :class:`unicode` strings.
@@ -205,6 +208,7 @@ class StringField(Field):
 
     def convert(self, value):
         return to_unicode(value)
+
 
 class BytesField(Field):
     """
@@ -218,12 +222,24 @@ class BytesField(Field):
             value = value.encode('utf-8')
         return str(value)
 
+
 class DateField(Field):
     """
     A field which accepts only :class:`datetime.date` and :class:`datetime.datetime` types.
     """
     def __init__(self, doc, **kwargs):
         Field.__init__(self, doc, datetime.date, datetime.datetime, **kwargs)
+
+    def __setattr__(self, name, value):
+        if name == 'value':
+            # Force use of our date and datetime types, to fix bugs in python2
+            # with strftime on year<1900.
+            if type(value) is datetime.datetime:
+                value = new_datetime(value)
+            if type(value) is datetime.date:
+                value = new_date(value)
+        return object.__setattr__(self, name, value)
+
 
 class TimeField(Field):
     """
@@ -232,12 +248,14 @@ class TimeField(Field):
     def __init__(self, doc, **kwargs):
         Field.__init__(self, doc, datetime.time, datetime.datetime, **kwargs)
 
+
 class DeltaField(Field):
     """
     A field which accepts only :class:`datetime.timedelta` type.
     """
     def __init__(self, doc, **kwargs):
         Field.__init__(self, doc, datetime.timedelta, **kwargs)
+
 
 class _CapBaseObjectMeta(type):
     def __new__(cls, name, bases, attrs):
@@ -259,6 +277,7 @@ class _CapBaseObjectMeta(type):
                 doc += ' (default: %s)' % field.value
             new_class.__doc__ += '\n:var %s: %s' % (name, doc)
         return new_class
+
 
 class CapBaseObject(object):
     """
@@ -357,8 +376,8 @@ class CapBaseObject(object):
         if self._fields is not None and name in self._fields:
             return self._fields[name].value
         else:
-            raise AttributeError, "'%s' object has no attribute '%s'" % (
-                self.__class__.__name__, name)
+            raise AttributeError("'%s' object has no attribute '%s'" % (
+                self.__class__.__name__, name))
 
     def __setattr__(self, name, value):
         try:
@@ -376,7 +395,8 @@ class CapBaseObject(object):
                     # If the value was converted
                     if nvalue is not value:
                         warnings.warn('Value %s was converted from %s to %s' %
-                            (name, type(value), type(nvalue)), ConversionWarning, stacklevel=2)
+                                      (name, type(value), type(nvalue)),
+                                      ConversionWarning, stacklevel=2)
                     value = nvalue
                 except Exception:
                     # error during conversion, it will probably not
@@ -395,3 +415,61 @@ class CapBaseObject(object):
             self._fields.pop(name)
         except KeyError:
             object.__delattr__(self, name)
+
+    def to_dict(self):
+        def iter_decorate(d):
+            for key, value in d:
+                if key == 'id' and self.backend is not None:
+                    value = self.fullid
+                yield key, value
+
+        fields_iterator = self.iter_fields()
+        return OrderedDict(iter_decorate(fields_iterator))
+
+
+class Currency(object):
+    CUR_UNKNOWN        = 0
+    CUR_EUR            = 1
+    CUR_CHF            = 2
+    CUR_USD            = 3
+
+    TXT2CUR = OrderedDict(((u'€',   CUR_EUR),
+                           (u'EUR', CUR_EUR),
+                           (u'CHF', CUR_CHF),
+                           (u'$',   CUR_USD),
+                           (u'USD', CUR_USD),
+              ))
+
+    EXTRACTOR = re.compile(r'[\d\s,\.\-]', re.UNICODE)
+
+    @classmethod
+    def get_currency(klass, text):
+        u"""
+        >>> Currency.get_currency(u'42')
+        0
+        >>> Currency.get_currency(u'42 €')
+        1
+        >>> Currency.get_currency(u'$42')
+        3
+        >>> Currency.get_currency(u'42.000,00€')
+        1
+        >>> Currency.get_currency(u'$42 USD')
+        3
+        >>> Currency.get_currency(u'%42 USD')
+        3
+        >>> Currency.get_currency(u'US1D')
+        0
+        """
+        curtexts = klass.EXTRACTOR.sub(' ', text.upper()).split()
+        for curtext in curtexts:
+            cur = klass.TXT2CUR.get(curtext)
+            if cur is not None:
+                return cur
+        return klass.CUR_UNKNOWN
+
+    @classmethod
+    def currency2txt(klass, currency):
+        for txt, value in klass.TXT2CUR.iteritems():
+            if value == currency:
+                return txt
+        return u''

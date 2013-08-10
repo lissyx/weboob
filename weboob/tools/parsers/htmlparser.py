@@ -68,6 +68,7 @@ class HTMLTreeBuilder(_HTMLParser):
         except:
             pass
 
+
 class HTMLParser(IParser):
     def parse(self, data, encoding=None):
         parser = HTMLTreeBuilder(encoding)

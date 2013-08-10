@@ -47,6 +47,7 @@ class Task(object):
     def __repr__(self):
         return '<Task (%s,%s)>' % (self.backend, self.capability)
 
+
 class Member(object):
     def __init__(self, id, name):
         self.name = name
@@ -62,6 +63,7 @@ class Member(object):
         if len(name) > 20:
             name = '%s..' % name[:18]
         return name
+
 
 class Event(object):
     def __init__(self, name, backend):
@@ -272,11 +274,13 @@ h2. Attendees
         self.content.content = s
         self.backend.push_content(self.content, message)
 
+
 class Boobathon(ReplApplication):
     APPNAME = 'boobathon'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2011 Romain Bignon'
     DESCRIPTION = 'Console application to participate to a Boobathon.'
+    SHORT_DESCRIPTION = "participate in a Boobathon"
     CAPS = ICapContent
     SYNOPSIS =  'Usage: %prog [-dqv] [-b backends] [-cnfs] boobathon\n'
     SYNOPSIS += '       %prog [--help] [--version]'
@@ -762,7 +766,6 @@ class Boobathon(ReplApplication):
 
         print >>sys.stderr, "There isn't any task in progress."
         return 1
-
 
     def load_default_backends(self):
         """

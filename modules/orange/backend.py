@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.messages import CantSendMessage, ICapMessages, ICapMessagesPost
 from weboob.capabilities.account import ICapAccount, StatusField
@@ -33,9 +33,9 @@ __all__ = ['OrangeBackend']
 
 class OrangeBackend(BaseBackend, ICapAccount, ICapMessages, ICapMessagesPost):
     NAME = 'orange'
-    MAINTAINER = 'Nicolas Duhamel'
+    MAINTAINER = u'Nicolas Duhamel'
     EMAIL = 'nicolas@jombi.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'Orange French mobile phone provider'
     LICENSE = 'AGPLv3+'
     CONFIG = BackendConfig(Value('login', label='Login'),

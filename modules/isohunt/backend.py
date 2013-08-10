@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from weboob.capabilities.torrent import ICapTorrent
+from weboob.capabilities.torrent import ICapTorrent, Torrent
 from weboob.tools.backend import BaseBackend
 
 from .browser import IsohuntBrowser
@@ -29,15 +29,12 @@ __all__ = ['IsohuntBackend']
 
 class IsohuntBackend(BaseBackend, ICapTorrent):
     NAME = 'isohunt'
-    MAINTAINER = 'Julien Veyssier'
+    MAINTAINER = u'Julien Veyssier'
     EMAIL = 'julien.veyssier@aiur.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'isoHunt BitTorrent tracker'
     LICENSE = 'AGPLv3+'
     BROWSER = IsohuntBrowser
-
-    def create_default_browser(self):
-        return self.create_browser()
 
     def get_torrent(self, id):
         return self.browser.get_torrent(id)
@@ -49,4 +46,17 @@ class IsohuntBackend(BaseBackend, ICapTorrent):
         return self.browser.openurl(torrent.url.encode('utf-8')).read()
 
     def iter_torrents(self, pattern):
-        return self.browser.iter_torrents(pattern.replace(' ','+'))
+        return self.browser.iter_torrents(pattern.replace(' ', '+'))
+
+    def fill_torrent(self, torrent, fields):
+        if 'description' in fields or 'files' in fields:
+            tor = self.get_torrent(torrent.id)
+            torrent.description = tor.description
+            torrent.magnet = tor.magnet
+            torrent.files = tor.files
+            torrent.url = tor.url
+        return torrent
+
+    OBJECTS = {
+        Torrent: fill_torrent
+    }

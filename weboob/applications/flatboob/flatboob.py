@@ -21,7 +21,7 @@
 import sys
 
 from weboob.capabilities.housing import ICapHousing, Query
-from weboob.tools.application.repl import ReplApplication
+from weboob.tools.application.repl import ReplApplication, defaultcount
 from weboob.tools.application.formatters.iformatter import IFormatter, PrettyFormatter
 
 
@@ -58,6 +58,7 @@ class HousingFormatter(IFormatter):
                 result += ' %s: %s\n' % (key, value)
         return result
 
+
 class HousingListFormatter(PrettyFormatter):
     MANDATORY_FIELDS = ('id', 'title', 'cost', 'text')
 
@@ -74,9 +75,10 @@ class HousingListFormatter(PrettyFormatter):
 
 class Flatboob(ReplApplication):
     APPNAME = 'flatboob'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2012 Romain Bignon'
-    DESCRIPTION = 'Console application to search a house.'
+    DESCRIPTION = "Console application to search for housing."
+    SHORT_DESCRIPTION = "search for housing"
     CAPS = ICapHousing
     EXTRA_FORMATTERS = {'housing_list': HousingListFormatter,
                         'housing':      HousingFormatter,
@@ -89,7 +91,13 @@ class Flatboob(ReplApplication):
         self.load_config()
         return ReplApplication.main(self, argv)
 
+    @defaultcount(10)
     def do_search(self, line):
+        """
+        search
+
+        Search for housing. Parameters are interactively asked.
+        """
         pattern = 'notempty'
         query = Query()
         query.cities = []
@@ -101,7 +109,7 @@ class Flatboob(ReplApplication):
                 break
 
             cities = []
-            for backend, city in self.do('search_city', pattern):
+            for backend, city in self.weboob.do('search_city', pattern):
                 cities.append(city)
 
             if len(cities) == 0:
@@ -140,7 +148,6 @@ class Flatboob(ReplApplication):
         self.start_format()
         for backend, housing in self.do('search_housings', query):
             self.cached_format(housing)
-        self.flush()
 
     def ask_int(self, txt):
         r = self.ask(txt, default='', regexp='(\d+|)')
@@ -154,15 +161,19 @@ class Flatboob(ReplApplication):
             return self._complete_object()
 
     def do_info(self, _id):
+        """
+        info ID
+
+        Get information about a housing.
+        """
         if not _id:
             print >>sys.stderr, 'This command takes an argument: %s' % self.get_command_help('info', short=True)
             return 2
 
         housing = self.get_object(_id, 'get_housing')
         if not housing:
-            print >>sys.stderr, 'Housing not found: %s' %  _id
+            print >>sys.stderr, 'Housing not found: %s' % _id
             return 3
 
         self.start_format()
         self.format(housing)
-        self.flush()

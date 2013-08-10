@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from PyQt4.QtGui import QDialog, QTreeWidgetItem, QLabel, QFormLayout, \
                         QMessageBox, QPixmap, QImage, QIcon, QHeaderView, \
@@ -170,7 +170,7 @@ class BackendCfg(QDialog):
         pd.setWindowModality(Qt.WindowModal)
         try:
             self.weboob.repositories.update(pd)
-        except ModuleInstallError, err:
+        except ModuleInstallError as err:
             QMessageBox.critical(self, self.tr('Update error'),
                                  unicode(self.tr('Unable to update modules: %s' % (err))),
                                  QMessageBox.Ok)
@@ -206,7 +206,7 @@ class BackendCfg(QDialog):
 
         try:
             self.weboob.repositories.install(minfo, pd)
-        except ModuleInstallError, err:
+        except ModuleInstallError as err:
             QMessageBox.critical(self, self.tr('Install error'),
                                  unicode(self.tr('Unable to install module %s: %s' % (minfo.name, err))),
                                  QMessageBox.Ok)
@@ -221,7 +221,7 @@ class BackendCfg(QDialog):
                 continue
 
             item = QTreeWidgetItem(None, [instance_name, name])
-            item.setCheckState(0, Qt.Checked if params.get('_enabled', '1').lower() in ('1', 'y', 'true') \
+            item.setCheckState(0, Qt.Checked if params.get('_enabled', '1').lower() in ('1', 'y', 'true')
                 else Qt.Unchecked)
 
             self.set_icon(item, info)
@@ -381,7 +381,7 @@ class BackendCfg(QDialog):
               ', '.join(sorted(cap.__name__.replace('ICap', '') for cap in module.iter_caps()))))
 
         if module.has_caps(ICapAccount) and self.ui.nameEdit.isEnabled() and \
-            module.klass.ACCOUNT_REGISTER_PROPERTIES is not None:
+                module.klass.ACCOUNT_REGISTER_PROPERTIES is not None:
             self.ui.registerButton.show()
         else:
             self.ui.registerButton.hide()
@@ -442,7 +442,7 @@ class BackendCfg(QDialog):
 
             try:
                 value = qtvalue.get_value()
-            except ValueError, e:
+            except ValueError as e:
                 QMessageBox.critical(self, self.tr('Invalid value'),
                     unicode(self.tr('Invalid value for field "%s":<br /><br />%s')) % (field.label, e))
                 return
@@ -507,7 +507,7 @@ class BackendCfg(QDialog):
                 for key, widget in props_widgets.iteritems():
                     try:
                         v = widget.get_value()
-                    except ValueError, e:
+                    except ValueError as e:
                         QMessageBox.critical(self, self.tr('Invalid value'),
                             unicode(self.tr('Invalid value for field "%s":<br /><br />%s')) % (key, e))
                         end = False
@@ -517,7 +517,7 @@ class BackendCfg(QDialog):
                 if end:
                     try:
                         module.klass.register_account(account)
-                    except AccountRegisterError, e:
+                    except AccountRegisterError as e:
                         QMessageBox.critical(self, self.tr('Error during register'),
                             unicode(self.tr('Unable to register account %s:<br /><br />%s')) % (website, e))
                         end = False

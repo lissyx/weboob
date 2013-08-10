@@ -30,6 +30,7 @@ __all__ = ['OkCBrowser']
 class OkCException(Exception):
     pass
 
+
 class OkCBrowser(BaseBrowser):
     DOMAIN = 'm.okcupid.com'
     PROTOCOL = 'https'
@@ -43,7 +44,6 @@ class OkCBrowser(BaseBrowser):
             ('http://%s/profile/.*/photos' % DOMAIN, PhotosPage),
             ('http://%s/profile/[^/]*' % DOMAIN, ProfilePage),
     ))
-
 
     logged_in = False
 

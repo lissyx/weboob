@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.video import ICapVideo, BaseVideo
 from weboob.capabilities.collection import ICapCollection, CollectionNotFound
@@ -33,9 +33,9 @@ __all__ = ['DailymotionBackend']
 
 class DailymotionBackend(BaseBackend, ICapVideo, ICapCollection):
     NAME = 'dailymotion'
-    MAINTAINER = 'Romain Bignon'
+    MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'Dailymotion video streaming website'
     LICENSE = 'AGPLv3+'
     BROWSER = DailymotionBrowser
@@ -45,7 +45,8 @@ class DailymotionBackend(BaseBackend, ICapVideo, ICapCollection):
             return self.browser.get_video(_id)
 
     SORTBY = ['relevance', 'rated', 'visited', None]
-    def search_videos(self, pattern, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=False, max_results=None):
+
+    def search_videos(self, pattern, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=False):
         with self.browser:
             return self.browser.search_videos(pattern, self.SORTBY[sortby])
 
@@ -53,7 +54,7 @@ class DailymotionBackend(BaseBackend, ICapVideo, ICapCollection):
         if fields != ['thumbnail']:
             # if we don't want only the thumbnail, we probably want also every fields
             with self.browser:
-                video = self.browser.get_video(DailymotionVideo.id2url(video.id), video)
+                video = self.browser.get_video(video.id, video)
         if 'thumbnail' in fields and video.thumbnail:
             with self.browser:
                 video.thumbnail.data = self.browser.readurl(video.thumbnail.url)

@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from weboob.tools.backend import BaseBackend, BackendConfig
 from weboob.capabilities.content import ICapContent, Content
@@ -34,7 +34,7 @@ class MediawikiBackend(BaseBackend, ICapContent):
     NAME = 'mediawiki'
     MAINTAINER = u'Clément Schreiner'
     EMAIL = 'clemux@clemux.info'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = 'Wikis running MediaWiki, like Wikipedia'
     CONFIG = BackendConfig(Value('url',      label='URL of the Mediawiki website', default='http://en.wikipedia.org/', regexp='https?://.*'),
@@ -54,19 +54,19 @@ class MediawikiBackend(BaseBackend, ICapContent):
                                    self.config['apiurl'].get(),
                                    username, password)
 
-    def get_content(self, _id):
+    def get_content(self, _id, revision=None):
         _id = _id.replace(' ', '_').encode('utf-8')
         content = Content(_id)
         page = _id
+        rev = revision.id if revision else None
         with self.browser:
-            data = self.browser.get_wiki_source(page)
+            data = self.browser.get_wiki_source(page, rev)
 
         content.content = data
         return content
 
-    def iter_revisions(self, _id, max_results=10):
-        for rev in self.browser.iter_wiki_revisions(_id, max_results):
-            yield rev
+    def iter_revisions(self, _id):
+        return self.browser.iter_wiki_revisions(_id)
 
     def push_content(self, content, message=None, minor=False):
         self.browser.set_wiki_source(content, message, minor)

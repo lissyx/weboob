@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.paste import ICapPaste
 
@@ -47,6 +47,7 @@ class BasePasteBackend(ICapPaste):
         for e in expirations:
             if max_age is False or max_age >= e:
                 return e
+
 
 def test():
     class MockPasteBackend(BasePasteBackend):

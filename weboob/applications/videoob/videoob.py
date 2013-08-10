@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 import subprocess
 import sys
@@ -25,7 +25,7 @@ import os
 
 from weboob.capabilities.video import ICapVideo, BaseVideo
 from weboob.capabilities.base import empty
-from weboob.tools.application.repl import ReplApplication
+from weboob.tools.application.repl import ReplApplication, defaultcount
 from weboob.tools.application.media_player import InvalidMediaPlayer, MediaPlayer, MediaPlayerNotFound
 from weboob.tools.application.formatters.iformatter import PrettyFormatter
 
@@ -39,6 +39,9 @@ class VideoListFormatter(PrettyFormatter):
         return obj.title
 
     def get_description(self, obj):
+        if empty(obj.duration) and empty(obj.date):
+            return None
+
         result = '%s' % (obj.duration or obj.date)
         if hasattr(obj, 'author') and not empty(obj.author):
             result += u' - %s' % obj.author
@@ -46,12 +49,14 @@ class VideoListFormatter(PrettyFormatter):
             result += u' (%s/%s)' % (obj.rating, obj.rating_max)
         return result
 
+
 class Videoob(ReplApplication):
     APPNAME = 'videoob'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2011 Christophe Benz, Romain Bignon, John Obbele'
-    DESCRIPTION = 'Console application allowing to search for videos on various websites, ' \
-                  'play and download them and get information.'
+    DESCRIPTION = "Console application allowing to search for videos on various websites, " \
+                  "play and download them and get information."
+    SHORT_DESCRIPTION = "search and play videos"
     CAPS = ICapVideo
     EXTRA_FORMATTERS = {'video_list': VideoListFormatter}
     COMMANDS_FORMATTERS = {'search': 'video_list',
@@ -108,15 +113,15 @@ class Videoob(ReplApplication):
         if video.url.startswith('rtmp'):
             if not check_exec('rtmpdump'):
                 return 1
-            args = ('rtmpdump', '-r', video.url, '-o', dest)
+            args = ('rtmpdump', '-e', '-r', video.url, '-o', dest)
         elif video.url.startswith('mms'):
             if not check_exec('mimms'):
                 return 1
-            args = ('mimms', video.url, dest)
+            args = ('mimms', '-r', video.url, dest)
         else:
             if not check_exec('wget'):
                 return 1
-            args = ('wget', video.url, '-O', dest)
+            args = ('wget', '-c', video.url, '-O', dest)
 
         os.spawnlp(os.P_WAIT, args[0], *args)
 
@@ -144,11 +149,12 @@ class Videoob(ReplApplication):
             return 4
         try:
             player_name = self.config.get('media_player')
+            media_player_args = self.config.get('media_player_args')
             if not player_name:
                 self.logger.info(u'You can set the media_player key to the player you prefer in the videoob '
                                   'configuration file.')
-            self.player.play(video, player_name=player_name)
-        except (InvalidMediaPlayer, MediaPlayerNotFound), e:
+            self.player.play(video, player_name=player_name, player_args=media_player_args)
+        except (InvalidMediaPlayer, MediaPlayerNotFound) as e:
             print '%s\nVideo URL: %s' % (e, video.url)
 
     def complete_info(self, text, line, *ignored):
@@ -173,7 +179,6 @@ class Videoob(ReplApplication):
 
         self.start_format()
         self.format(video)
-        self.flush()
 
     def complete_nsfw(self, text, line, begidx, endidx):
         return ['on', 'off']
@@ -198,6 +203,7 @@ class Videoob(ReplApplication):
         else:
             print "on" if self.nsfw else "off"
 
+    @defaultcount()
     def do_search(self, pattern):
         """
         search PATTERN
@@ -210,7 +216,5 @@ class Videoob(ReplApplication):
 
         self.change_path([u'search'])
         self.start_format(pattern=pattern)
-        for backend, video in self.do('search_videos', pattern=pattern, nsfw=self.nsfw,
-                                      max_results=self.options.count):
+        for backend, video in self.do('search_videos', pattern=pattern, nsfw=self.nsfw):
             self.cached_format(video)
-        self.flush()

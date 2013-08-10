@@ -18,6 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
+from html2text import unescape
 import socket
 from datetime import datetime
 from dateutil.parser import parse as parse_dt
@@ -95,9 +96,9 @@ class FieldOld(FieldBase):
         return int((datetime.now() - birthday).days / 365.25)
 
 
-class FieldSplit(FieldBase):
+class FieldList(FieldBase):
     def get_value(self, profile, consts):
-        return [html2text(s).strip() for s in profile[self.key].split(self.key2) if len(s.strip()) > 0]
+        return profile[self.key]
 
 
 class FieldBMI(FieldBase):
@@ -126,23 +127,19 @@ class FieldBMI(FieldBase):
             return 'obese'
 
 
-class FieldFlags(FieldBase):
+class FieldConst(FieldBase):
     def get_value(self, profile, consts):
-        i = int(profile[self.key])
-        labels = []
-        for d in consts[self.key]:
-            if i & (1 << int(d['value'])):
-                labels.append(html2text(d['label']).strip())
-        return labels
-
-
-class FieldList(FieldBase):
-    def get_value(self, profile, consts):
-        i = int(profile[self.key])
-        for d in consts[self.key]:
-            if i == int(d['value']):
-                return html2text(d['label']).strip()
-        return ''
+        v = profile[self.key]
+        if isinstance(v, (basestring,int)):
+            try:
+                return consts[self.key][str(v)]
+            except KeyError:
+                return ''
+        elif isinstance(v, (tuple,list)):
+            labels = []
+            for i in v:
+                labels.append(consts[self.key][i])
+            return labels
 
 
 class Contact(_Contact):
@@ -158,86 +155,90 @@ class Contact(_Contact):
                                   ))),
                  ('_stats',       OrderedDict((
                                     ('mails',               FieldPopu('mails')),
-                                    ('baskets',             FieldPopu('contacts')),
-                                    ('charms',              FieldPopu('flashs')),
+                                    ('charms',              FieldPopu('charmes')),
                                     ('visites',             FieldPopu('visites')),
+                                    ('baskets',             FieldPopu('panier')),
                                     ('invits',              FieldPopu('invits')),
                                     ('bonus',               FieldPopu('bonus')),
-                                    ('score',               FieldPopu('popu')),
-                                    ('ratio',               FieldPopuRatio('mails', 'flashs')),
-                                    ('mailable',            FieldBool('mailable')),
+                                    ('score',               FieldStr('points')),
+                                    ('ratio',               FieldPopuRatio('mails', 'charmes')),
+                                    ('mailable',            FieldBool('can_mail')),
                                   ))),
                  ('details',      OrderedDict((
-                                    ('old',                 FieldOld('birthday')),
-                                    ('birthday',            FieldStr('birthday')),
+                                    #('old',                 FieldStr('age')),
+                                    ('old',                 FieldOld('birthdate')),
+                                    ('birthday',            FieldStr('birthdate')),
                                     ('zipcode',             FieldStr('zip')),
                                     ('location',            FieldStr('city')),
                                     ('distance',            FieldDist('dist')),
                                     ('country',             FieldStr('country')),
                                     ('phone',               FieldStr('phone')),
-                                    ('eyes',                FieldList('eyes')),
-                                    ('hair_color',          FieldList('hair_color')),
-                                    ('hair_size',           FieldList('hair_size')),
-                                    ('height',              FieldList('size')),
-                                    ('weight',              FieldList('weight')),
+                                    ('eyes',                FieldConst('eyes_color')),
+                                    ('hair_color',          FieldConst('hair_color')),
+                                    ('hair_size',           FieldConst('hair_size')),
+                                    ('height',              FieldConst('size')),
+                                    ('weight',              FieldConst('weight')),
                                     ('BMI',                 FieldBMI('size', 'weight')),
                                     ('fat',                 FieldBMI('size', 'weight', fat=True)),
-                                    ('shape',               FieldList('shape')),
-                                    ('origins',             FieldList('origins')),
-                                    ('signs',               FieldFlags('checks1')),
+                                    ('shape',               FieldConst('shape')),
+                                    ('origins',             FieldConst('origins')),
+                                    ('signs',               FieldConst('features')),
                                     ('job',                 FieldStr('job')),
-                                    ('style',               FieldList('style')),
-                                    ('food',                FieldList('food')),
-                                    ('drink',               FieldList('drink')),
-                                    ('smoke',               FieldList('smoke')),
+                                    ('style',               FieldConst('styles')),
+                                    ('food',                FieldConst('diet')),
+                                    ('favorite_food',       FieldConst('favourite_food')),
+                                    ('drink',               FieldConst('alcohol')),
+                                    ('smoke',               FieldConst('tobacco')),
                                   ))),
                 ('tastes',        OrderedDict((
                                     ('hobbies',             FieldStr('hobbies')),
-                                    ('music',               FieldSplit('music', '<br>')),
-                                    ('cinema',              FieldSplit('cinema', '<br>')),
-                                    ('books',               FieldSplit('books', '<br>')),
-                                    ('tv',                  FieldSplit('tvs', '<br>')),
+                                    ('music',               FieldList('music')),
+                                    ('cinema',              FieldList('cinema')),
+                                    ('books',               FieldList('books')),
+                                    ('tv',                  FieldList('tvs')),
                                   ))),
-                ('sex',           OrderedDict((
-                                    ('underwear',           FieldFlags('checks7')),
-                                    ('practices',           FieldFlags('checks5')),
-                                    ('favorite',            FieldFlags('checks3')),
-                                    ('toys',                FieldFlags('checks6')),
+                ('+sex',          OrderedDict((
+                                    ('underwear',           FieldConst('underwear')),
+                                    ('practices',           FieldConst('sexgames')),
+                                    ('favorite',            FieldConst('arousing')),
+                                    ('toys',                FieldConst('sextoys')),
                                   ))),
-                ('personality',   OrderedDict((
-                                    ('snap',                FieldStr('texts1')),
-                                    ('exciting',            FieldStr('texts2')),
-                                    ('hate',                FieldStr('texts3')),
-                                    ('vices',               FieldStr('texts4')),
-                                    ('assets',              FieldStr('texts6')),
-                                    ('fantasies',           FieldStr('texts5')),
-                                    ('is',                  FieldFlags('checks2')),
+                ('+personality',  OrderedDict((
+                                    ('snap',                FieldStr('fall_for')),
+                                    ('exciting',            FieldStr('turned_on_by')),
+                                    ('hate',                FieldStr('cant_stand')),
+                                    ('vices',               FieldStr('vices')),
+                                    ('assets',              FieldStr('assets')),
+                                    ('fantasies',           FieldStr('fantasies')),
+                                    ('is',                  FieldConst('character')),
+                                  ))),
+                ('-personality',  OrderedDict((
+                                    ('accessories',         FieldConst('accessories')),
+                                    ('skills',              FieldConst('skills')),
+                                    ('socios',              FieldConst('socios')),
+                                    ('family',              FieldConst('family')),
+                                    ('pets',                FieldConst('pets')),
                                   )))
         ))
 
     def parse_profile(self, profile, consts):
-        cat = int(profile.get('cat', 3))
-        if cat == 1:
+        if profile['online']:
             self.status = Contact.STATUS_ONLINE
             self.status_msg = u'online'
             self.status_msg = u'since %s' % profile['last_cnx']
-        elif cat == 2:
-            self.status = Contact.STATUS_AWAY
-            self.status_msg = u'away'
-            self.status_msg = u'connection at %s' % profile['last_cnx']
-        elif cat == 3:
+        else:
             self.status = Contact.STATUS_OFFLINE
             self.status_msg = u'last connection %s' % profile['last_cnx']
 
-        self.summary = html2text(profile.get('about1', '')).strip().replace('\n\n', '\n')
-        if len(profile.get('about2', '')) > 0:
-            self.summary += u'\n\nLooking for:\n%s' % html2text(profile['about2']).strip().replace('\n\n', '\n')
+        self.summary = unicode(unescape(profile.get('announce', '').strip()))
+        if len(profile.get('shopping_list', '')) > 0:
+            self.summary += u'\n\nLooking for:\n%s' % unescape(profile['shopping_list'].strip())
 
-        for photo in profile['pictures']:
-            self.set_photo(photo['url'].split('/')[-1],
-                              url=photo['url'],
-                              thumbnail_url=photo['url'].replace('image', 'thumb1_'),
-                              hidden=photo['hidden'])
+        for photo in profile['pics']:
+            self.set_photo(photo.split('/')[-1],
+                              url=photo + '/full',
+                              thumbnail_url=photo + '/small',
+                              hidden=False)
         self.profile = OrderedDict()
 
         if 'sex' in profile:
@@ -245,12 +246,21 @@ class Contact(_Contact):
                 flags = ProfileNode.SECTION
                 if section.startswith('_'):
                     flags |= ProfileNode.HEAD
-                    section = section.lstrip('_')
+                if (section.startswith('+') and int(profile['sex']) != 1) or \
+                   (section.startswith('-') and int(profile['sex']) != 0):
+                    continue
+
+                section = section.lstrip('_+-')
+
                 s = ProfileNode(section, section.capitalize(), OrderedDict(), flags=flags)
 
                 for key, builder in d.iteritems():
-                    value = builder.get_value(profile, consts[int(profile['sex'])])
-                    s.value[key] = ProfileNode(key, key.capitalize().replace('_', ' '), value)
+                    try:
+                        value = builder.get_value(profile, consts[int(profile['sex'])])
+                    except KeyError:
+                        pass
+                    else:
+                        s.value[key] = ProfileNode(key, key.capitalize().replace('_', ' '), value)
 
                 self.profile[section] = s
 

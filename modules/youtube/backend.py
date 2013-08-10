@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright(C) 2010-2011 Christophe Benz, Romain Bignon
+# Copyright(C) 2010-2013 Christophe Benz, Romain Bignon, Laurent Bachelier
 #
 # This file is part of weboob.
 #
@@ -18,10 +18,14 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
+
+try:
+    import gdata.youtube.service
+except ImportError:
+    raise ImportError("Please install python-gdata")
 
 import datetime
-import gdata.youtube.service
 import re
 import urllib
 
@@ -42,16 +46,16 @@ __all__ = ['YoutubeBackend']
 
 class YoutubeBackend(BaseBackend, ICapVideo, ICapCollection):
     NAME = 'youtube'
-    MAINTAINER = 'Christophe Benz'
-    EMAIL = 'christophe.benz@gmail.com'
-    VERSION = '0.d'
+    MAINTAINER = u'Laurent Bachelier'
+    EMAIL = 'laurent@bachelier.name'
+    VERSION = '0.h'
     DESCRIPTION = 'YouTube video streaming website'
     LICENSE = 'AGPLv3+'
     BROWSER = YoutubeBrowser
     CONFIG = BackendConfig(Value('username', label='Email address', default=''),
                            ValueBackendPassword('password', label='Password', default=''))
 
-    URL_RE = re.compile(r'^https?://(?:\w*\.?youtube\.com/(?:watch\?v=|v/)|youtu\.be\/|\w*\.?youtube\.com\/user\/\w+#p\/u\/\d+\/)([^\?&]+)')
+    URL_RE = re.compile(r'^https?://(?:\w*\.?youtube(?:|-nocookie)\.com/(?:watch\?v=|v/)|youtu\.be\/|\w*\.?youtube\.com\/user\/\w+#p\/u\/\d+\/)([^\?&]+)')
 
     def create_default_browser(self):
         password = None
@@ -89,8 +93,8 @@ class YoutubeBackend(BaseBackend, ICapVideo, ICapCollection):
         with self.browser:
             url, ext = self.browser.get_video_url(player_url)
 
-        video.url = url
-        video.ext = ext
+        video.url = unicode(url)
+        video.ext = unicode(ext)
 
     def get_video(self, _id):
         m = self.URL_RE.match(_id)
@@ -98,9 +102,10 @@ class YoutubeBackend(BaseBackend, ICapVideo, ICapCollection):
             _id = m.group(1)
 
         yt_service = gdata.youtube.service.YouTubeService()
+        yt_service.ssl = True
         try:
             entry = yt_service.GetYouTubeVideoEntry(video_id=_id)
-        except gdata.service.Error, e:
+        except gdata.service.Error as e:
             if e.args[0]['status'] == 400:
                 return None
             raise
@@ -111,10 +116,11 @@ class YoutubeBackend(BaseBackend, ICapVideo, ICapCollection):
         video.set_empty_fields(NotAvailable)
         return video
 
-    def search_videos(self, pattern, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=False, max_results=None):
+    def search_videos(self, pattern, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=False):
         YOUTUBE_MAX_RESULTS = 50
         YOUTUBE_MAX_START_INDEX = 1000
         yt_service = gdata.youtube.service.YouTubeService()
+        yt_service.ssl = True
 
         start_index = 1
         nb_yielded = 0
@@ -127,23 +133,21 @@ class YoutubeBackend(BaseBackend, ICapVideo, ICapCollection):
             query.orderby = ('relevance', 'rating', 'viewCount', 'published')[sortby]
             query.racy = 'include' if nsfw else 'exclude'
 
-            if max_results is None or max_results > YOUTUBE_MAX_RESULTS:
-                query_max_results = YOUTUBE_MAX_RESULTS
-            else:
-                query_max_results = max_results
-            query.max_results = query_max_results
+            query.max_results = YOUTUBE_MAX_RESULTS
 
             if start_index > YOUTUBE_MAX_START_INDEX:
                 return
             query.start_index = start_index
-            start_index += query_max_results
+            start_index += YOUTUBE_MAX_RESULTS
 
             feed = yt_service.YouTubeQuery(query)
             for entry in feed.entry:
                 yield self._entry2video(entry)
                 nb_yielded += 1
-                if nb_yielded == max_results:
-                    return
+
+            if nb_yielded < YOUTUBE_MAX_RESULTS:
+                return
+
 
     def latest_videos(self):
         return self.search_videos(None, ICapVideo.SEARCH_DATE)

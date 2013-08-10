@@ -17,14 +17,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
 
 import sys
 
 from weboob.capabilities.torrent import ICapTorrent, MagnetOnly
-from weboob.tools.application.repl import ReplApplication
+from weboob.tools.application.repl import ReplApplication, defaultcount
 from weboob.tools.application.formatters.iformatter import IFormatter, PrettyFormatter
 from weboob.core import CallErrors
+from weboob.capabilities.base import NotAvailable, empty
 
 
 __all__ = ['Weboorrents']
@@ -43,7 +43,8 @@ class TorrentInfoFormatter(IFormatter):
     def format_obj(self, obj, alias):
         result = u'%s%s%s\n' % (self.BOLD, obj.name, self.NC)
         result += 'ID: %s\n' % obj.fullid
-        result += 'Size: %s\n' % sizeof_fmt(obj.size)
+        if obj.size != NotAvailable:
+            result += 'Size: %s\n' % sizeof_fmt(obj.size)
         result += 'Seeders: %s\n' % obj.seeders
         result += 'Leechers: %s\n' % obj.leechers
         result += 'URL: %s\n' % obj.url
@@ -54,7 +55,7 @@ class TorrentInfoFormatter(IFormatter):
             for f in obj.files:
                 result += ' * %s\n' % f
         result += '\n%sDescription%s\n' % (self.BOLD, self.NC)
-        result += obj.description
+        result += '%s' % obj.description
         return result
 
 
@@ -64,17 +65,37 @@ class TorrentListFormatter(PrettyFormatter):
     def get_title(self, obj):
         return obj.name
 
+    NB2COLOR = ((0, 'red', None),
+                (1, 'blue', None),
+                (5, 'green', None),
+                (10, 'green', 'bold'),
+               )
+
+    def _get_color(self, nb):
+        if empty(nb):
+            return self.colored('N/A', 'red')
+
+        for threshold, _color, _attr in self.NB2COLOR:
+            if nb >= threshold:
+                color = _color
+                attr = _attr
+
+        return self.colored('%3d' % nb, color, attr)
+
     def get_description(self, obj):
-        size = sizeof_fmt(obj.size)
-        return '%10s   (Seed: %2d / Leech: %2d)' % (size, obj.seeders, obj.leechers)
+        size = self.colored('%10s' % sizeof_fmt(obj.size), 'magenta')
+        return '%s   (Seed: %s / Leech: %s)' % (size,
+                                                self._get_color(obj.seeders),
+                                                self._get_color(obj.leechers))
 
 
 class Weboorrents(ReplApplication):
     APPNAME = 'weboorrents'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2012 Romain Bignon'
-    DESCRIPTION = 'Console application allowing to search for torrents on various trackers ' \
-                  'and download .torrent files.'
+    DESCRIPTION = "Console application allowing to search for torrents on various trackers " \
+                  "and download .torrent files."
+    SHORT_DESCRIPTION = "search and download torrents"
     CAPS = ICapTorrent
     EXTRA_FORMATTERS = {'torrent_list': TorrentListFormatter,
                         'torrent_info': TorrentInfoFormatter,
@@ -94,15 +115,13 @@ class Weboorrents(ReplApplication):
 
         Get information about a torrent.
         """
-
-        torrent = self.get_object(id, 'get_torrent')
+        torrent = self.get_object(id, 'get_torrent', ('description', 'files'))
         if not torrent:
-            print >>sys.stderr, 'Torrent not found: %s' %  id
+            print >>sys.stderr, 'Torrent not found: %s' % id
             return 3
 
         self.start_format()
         self.format(torrent)
-        self.flush()
 
     def complete_getfile(self, text, line, *ignored):
         args = line.split(' ', 2)
@@ -135,16 +154,16 @@ class Weboorrents(ReplApplication):
                         try:
                             with open(dest, 'w') as f:
                                 f.write(buf)
-                        except IOError, e:
+                        except IOError as e:
                             print >>sys.stderr, 'Unable to write .torrent in "%s": %s' % (dest, e)
                             return 1
                     return
-        except CallErrors, errors:
+        except CallErrors as errors:
             for backend, error, backtrace in errors:
                 if isinstance(error, MagnetOnly):
                     print >>sys.stderr, u'Error(%s): No direct URL available, ' \
-                    u'please provide this magnet URL ' \
-                    u'to your client:\n%s' % (backend, error.magnet)
+                        u'please provide this magnet URL ' \
+                        u'to your client:\n%s' % (backend, error.magnet)
                     return 4
                 else:
                     self.bcall_error_handler(backend, error, backtrace)
@@ -152,6 +171,7 @@ class Weboorrents(ReplApplication):
         print >>sys.stderr, 'Torrent "%s" not found' % id
         return 3
 
+    @defaultcount(10)
     def do_search(self, pattern):
         """
         search [PATTERN]
@@ -165,4 +185,3 @@ class Weboorrents(ReplApplication):
         self.start_format(pattern=pattern)
         for backend, torrent in self.do('iter_torrents', pattern=pattern):
             self.cached_format(torrent)
-        self.flush()

@@ -18,9 +18,11 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from weboob.tools.browser import BasePage
+from weboob.tools.browser import BasePage,BrokenPageError
 from weboob.capabilities.torrent import Torrent
-from weboob.capabilities.base import NotAvailable
+from weboob.capabilities.base import NotAvailable, NotLoaded
+
+from html2text import unescape
 
 
 __all__ = ['TorrentsPage']
@@ -37,17 +39,24 @@ class TorrentsPage(BasePage):
         return float(n * m[u])
 
     def iter_torrents(self):
-        table = self.parser.select(self.document.getroot(), 'table#searchResult', 1)
+        try:
+            table = self.parser.select(self.document.getroot(), 'table#searchResult', 1)
+        except BrokenPageError:
+            return
+        first = True
         for tr in table.getiterator('tr'):
+            if first:
+                first = False
+                continue
             if tr.get('class', '') != "header":
                 td = tr.getchildren()[1]
                 div = td.getchildren()[0]
                 link = div.find('a').attrib['href']
-                title = div.find('a').text
+                title = unicode(unescape(div.find('a').text))
                 idt = link.split('/')[2]
 
                 a = td.getchildren()[1]
-                url = a.attrib['href']
+                url = unicode(a.attrib['href'])
 
                 size = td.find('font').text.split(',')[1].strip()
                 u = size.split(' ')[1].split(u'\xa0')[1].replace('i', '')
@@ -61,16 +70,19 @@ class TorrentsPage(BasePage):
                 torrent.size = self.unit(float(size), u)
                 torrent.seeders = int(seed)
                 torrent.leechers = int(leech)
+                torrent.description = NotLoaded
+                torrent.files = NotLoaded
+                torrent.magnet = NotLoaded
                 yield torrent
 
 
 class TorrentPage(BasePage):
     def get_torrent(self, id):
-        url = None
-        magnet = None
+        url = NotAvailable
+        magnet = NotAvailable
         for div in self.document.getiterator('div'):
             if div.attrib.get('id', '') == 'title':
-                title = div.text.strip()
+                title = unicode(unescape(div.text.strip()))
             elif div.attrib.get('class', '') == 'download':
                 for link in self.parser.select(div, 'a'):
                     href = link.attrib.get('href', '')
@@ -78,9 +90,9 @@ class TorrentPage(BasePage):
                     if href.startswith('https://'):
                         href = href.replace('https://', 'http://', 1)
                     if href.startswith('magnet:'):
-                        magnet = href
+                        magnet = unicode(href)
                     elif len(href):
-                        url = href
+                        url = unicode(href)
             elif div.attrib.get('id', '') == 'details':
                 size = float(div.getchildren()[0].getchildren()[5].text.split('(')[1].split('Bytes')[0])
                 if len(div.getchildren()) > 1 \
@@ -98,14 +110,14 @@ class TorrentPage(BasePage):
                         leech = ch.text
                     prev_child_txt = ch.text
             elif div.attrib.get('class', '') == 'nfo':
-                description = div.getchildren()[0].text.strip()
+                description = unicode(div.getchildren()[0].text_content().strip())
         torrent = Torrent(id, title)
         torrent.url = url or NotAvailable
         torrent.magnet = magnet
         torrent.size = size
         torrent.seeders = int(seed)
         torrent.leechers = int(leech)
-        torrent.description = description.strip()
-        torrent.files = ['NYI']
+        torrent.description = description
+        torrent.files = NotAvailable
 
         return torrent

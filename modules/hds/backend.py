@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.tools.backend import BaseBackend
 from weboob.capabilities.messages import ICapMessages, Message, Thread
@@ -31,9 +31,9 @@ __all__ = ['HDSBackend']
 
 class HDSBackend(BaseBackend, ICapMessages):
     NAME = 'hds'
-    MAINTAINER = 'Romain Bignon'
+    MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = u"Histoires de Sexe French erotic novels"
     STORAGE = {'seen': []}

@@ -1,6 +1,7 @@
-.TH TRANSLABOOB 1 "04 May 2012" "translaboob 0\&.c"
+.\" -*- coding: utf-8 -*-
+.TH TRANSLABOOB 1 "03 August 2013" "translaboob 0\&.g"
 .SH NAME
-translaboob
+translaboob \- translate text from one language to another
 .SH SYNOPSIS
 .B translaboob
 [\-dqv] [\-b \fIbackends\fR] [\-cnfs] [\fIcommand\fR [\fIarguments\fR..]]
@@ -14,6 +15,8 @@ translaboob
 Console application to translate text from one language to another
 
 .SS Supported websites:
+* ebonics (English to Ebonics translation service)
+.br
 * googletranslate (Google translation web service)
 .br
 * wordreference (Free online translator)
@@ -172,7 +175,7 @@ Availables: debug, info, warning, error.
 .br
 * default is an alias for warning
 .TP
-\fBls\fR [\fIPATH\fR]
+\fBls\fR [\-d] [\fIPATH\fR]
 .br
 List objects in current path.
 .br
@@ -204,6 +207,12 @@ show this help message and exit
 .TP
 \fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
 what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
 
 .SH LOGGING OPTIONS
 .TP
@@ -228,7 +237,7 @@ save every response
 filter result items to display given a boolean expression
 .TP
 \fB\-n COUNT\fR, \fB\-\-count=COUNT\fR
-get a maximum number of results (all backends merged)
+limit number of results (from each backends)
 .TP
 \fB\-s SELECT\fR, \fB\-\-select=SELECT\fR
 select result item keys to display (comma separated)
@@ -236,8 +245,8 @@ select result item keys to display (comma separated)
 .SH FORMATTING OPTIONS
 .TP
 \fB\-f FORMATTER\fR, \fB\-\-formatter=FORMATTER\fR
-select output formatter (csv, htmltable, multiline, simple, table, translation,
-webkit, xmltrans)
+select output formatter (csv, htmltable, json, multiline, simple, table,
+translation, webkit, xmltrans)
 .TP
 \fB\-\-no\-header\fR
 do not display header

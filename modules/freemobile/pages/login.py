@@ -18,7 +18,12 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-import Image
+import time
+
+try:
+    from PIL import Image
+except ImportError:
+    raise ImportError('Please install python-imaging')
 
 from weboob.tools.browser import BasePage
 
@@ -101,7 +106,7 @@ class FreeKeyboard(object):
 
     def get_small(self, string):
         for c in string:
-            #time.sleep(0.4)
+            time.sleep(0.5)
             url = 'https://mobile.free.fr/moncompte/chiffre.php?pos=' + c + '&small=1'
             self.basepage.browser.openurl(url)
 
@@ -117,7 +122,7 @@ class LoginPage(BasePage):
         self.browser.select_form(nr=0)
         self.browser.set_all_readonly(False)
         code = vk.get_string_code(login)
-        self.browser['login_abo'] = code
+        self.browser['login_abo'] = code.encode('utf-8')
         vk.get_small(code)
-        self.browser['pwd_abo'] = password
+        self.browser['pwd_abo'] = password.encode('utf-8')
         self.browser.submit(nologin=True)

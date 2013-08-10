@@ -1,6 +1,7 @@
-.TH FLATBOOB 1 "04 May 2012" "flatboob 0\&.c"
+.\" -*- coding: utf-8 -*-
+.TH FLATBOOB 1 "03 August 2013" "flatboob 0\&.g"
 .SH NAME
-flatboob
+flatboob \- search for housing
 .SH SYNOPSIS
 .B flatboob
 [\-dqv] [\-b \fIbackends\fR] [\-cnfs] [\fIcommand\fR [\fIarguments\fR..]]
@@ -11,7 +12,7 @@ flatboob
 .SH DESCRIPTION
 .LP
 
-Console application to search a house.
+Console application to search for housing.
 
 .SS Supported websites:
 * pap (French housing website)
@@ -19,9 +20,17 @@ Console application to search a house.
 * seloger (French housing website)
 .SH FLATBOOB COMMANDS
 .TP
-\fBinfo\fR
+\fBinfo\fR \fIID\fR
+.br
+Get information about a housing.
 .TP
 \fBsearch\fR
+.br
+Search for housing. Parameters are interactively asked.
+.br
+
+.br
+Default is limited to 10 results.
 .SH WEBOOB COMMANDS
 .TP
 \fBbackends\fR [\fIACTION\fR] [\fIBACKEND_NAME\fR]...
@@ -126,7 +135,7 @@ Availables: debug, info, warning, error.
 .br
 * default is an alias for warning
 .TP
-\fBls\fR [\fIPATH\fR]
+\fBls\fR [\-d] [\fIPATH\fR]
 .br
 List objects in current path.
 .br
@@ -158,6 +167,12 @@ show this help message and exit
 .TP
 \fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
 what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
 
 .SH LOGGING OPTIONS
 .TP
@@ -182,7 +197,7 @@ save every response
 filter result items to display given a boolean expression
 .TP
 \fB\-n COUNT\fR, \fB\-\-count=COUNT\fR
-get a maximum number of results (all backends merged)
+limit number of results (from each backends)
 .TP
 \fB\-s SELECT\fR, \fB\-\-select=SELECT\fR
 select result item keys to display (comma separated)
@@ -190,7 +205,7 @@ select result item keys to display (comma separated)
 .SH FORMATTING OPTIONS
 .TP
 \fB\-f FORMATTER\fR, \fB\-\-formatter=FORMATTER\fR
-select output formatter (csv, housing, housing_list, htmltable, multiline,
+select output formatter (csv, housing, housing_list, htmltable, json, multiline,
 simple, table, webkit)
 .TP
 \fB\-\-no\-header\fR

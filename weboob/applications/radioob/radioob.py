@@ -22,7 +22,7 @@ import sys
 
 from weboob.capabilities.radio import ICapRadio, Radio
 from weboob.capabilities.base import empty
-from weboob.tools.application.repl import ReplApplication
+from weboob.tools.application.repl import ReplApplication, defaultcount
 from weboob.tools.application.media_player import InvalidMediaPlayer, MediaPlayer, MediaPlayerNotFound
 from weboob.tools.application.formatters.iformatter import PrettyFormatter
 
@@ -32,7 +32,6 @@ __all__ = ['Radioob']
 
 class RadioListFormatter(PrettyFormatter):
     MANDATORY_FIELDS = ('id', 'title', 'description')
-
 
     def get_title(self, obj):
         return obj.title
@@ -49,10 +48,11 @@ class RadioListFormatter(PrettyFormatter):
 
 class Radioob(ReplApplication):
     APPNAME = 'radioob'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2012 Romain Bignon'
-    DESCRIPTION = 'Console application allowing to search for web radio stations, listen to them and get information ' \
-                  'like the current song.'
+    DESCRIPTION = "Console application allowing to search for web radio stations, listen to them and get information " \
+                  "like the current song."
+    SHORT_DESCRIPTION = "search, show or listen to radio stations"
     CAPS = ICapRadio
     EXTRA_FORMATTERS = {'radio_list': RadioListFormatter}
     COMMANDS_FORMATTERS = {'ls':     'radio_list',
@@ -89,11 +89,12 @@ class Radioob(ReplApplication):
             return 1
         try:
             player_name = self.config.get('media_player')
+            media_player_args = self.config.get('media_player_args')
             if not player_name:
                 self.logger.debug(u'You can set the media_player key to the player you prefer in the radioob '
                                   'configuration file.')
-            self.player.play(radio.streams[0], player_name=player_name)
-        except (InvalidMediaPlayer, MediaPlayerNotFound), e:
+            self.player.play(radio.streams[0], player_name=player_name, player_args=media_player_args)
+        except (InvalidMediaPlayer, MediaPlayerNotFound) as e:
             print '%s\nRadio URL: %s' % (e, radio.streams[0].url)
 
     def complete_info(self, text, line, *ignored):
@@ -116,8 +117,8 @@ class Radioob(ReplApplication):
             print >>sys.stderr, 'Radio not found:', _id
             return 3
         self.format(radio)
-        self.flush()
 
+    @defaultcount(10)
     def do_search(self, pattern=None):
         """
         search PATTERN
@@ -131,7 +132,6 @@ class Radioob(ReplApplication):
         for backend, radio in self.do('iter_radios_search', pattern=pattern):
             self.add_object(radio)
             self.format(radio)
-        self.flush()
 
     def do_ls(self, line):
         """
@@ -139,8 +139,5 @@ class Radioob(ReplApplication):
 
         List radios
         """
-        count = self.options.count
-        self.options.count = None
         ret = super(Radioob, self).do_ls(line)
-        self.options.count = count
         return ret

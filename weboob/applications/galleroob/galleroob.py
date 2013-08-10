@@ -17,13 +17,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 import sys
 import os
 from re import search, sub
 
-from weboob.tools.application.repl import ReplApplication
+from weboob.tools.application.repl import ReplApplication, defaultcount
 from weboob.capabilities.base import empty
 from weboob.capabilities.gallery import ICapGallery, BaseGallery, BaseImage
 from weboob.tools.application.formatters.iformatter import PrettyFormatter
@@ -48,9 +48,10 @@ class GalleryListFormatter(PrettyFormatter):
 
 class Galleroob(ReplApplication):
     APPNAME = 'galleroob'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = u'Copyright(C) 2011 Noé Rubinstein'
     DESCRIPTION = 'galleroob browses and downloads web image galleries'
+    SHORT_DESCRIPTION = 'browse and download web image galleries'
     CAPS = ICapGallery
     EXTRA_FORMATTERS = {'gallery_list': GalleryListFormatter}
     COMMANDS_FORMATTERS = {'search': 'gallery_list', 'ls': 'gallery_list'}
@@ -59,6 +60,7 @@ class Galleroob(ReplApplication):
     def __init__(self, *args, **kwargs):
         ReplApplication.__init__(self, *args, **kwargs)
 
+    @defaultcount(10)
     def do_search(self, pattern):
         """
         search PATTERN
@@ -70,10 +72,8 @@ class Galleroob(ReplApplication):
             return 2
 
         self.start_format(pattern=pattern)
-        for backend, gallery in self.do('search_gallery', pattern=pattern,
-                                        max_results=self.options.count):
+        for backend, gallery in self.do('search_gallery', pattern=pattern):
             self.cached_format(gallery)
-        self.flush()
 
     def do_download(self, line):
         """
@@ -155,4 +155,3 @@ class Galleroob(ReplApplication):
 
         self.start_format()
         self.format(gallery)
-        self.flush()

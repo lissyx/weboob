@@ -18,8 +18,6 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
-
 import os
 import shutil
 
@@ -29,10 +27,15 @@ from weboob.core.backendscfg import BackendsConfig
 from weboob.core.repositories import Repositories, IProgress
 from weboob.core.scheduler import Scheduler
 from weboob.tools.backend import BaseBackend
+from weboob.tools.config.iconfig import ConfigError
 from weboob.tools.log import getLogger
 
 
 __all__ = ['Weboob']
+
+
+class VersionsMismatchError(ConfigError):
+    pass
 
 
 class Weboob(object):
@@ -49,7 +52,7 @@ class Weboob(object):
     :param storage: provide a storage where backends can save data
     :type storage: :class:`weboob.tools.storage.IStorage`
     """
-    VERSION = '0.d'
+    VERSION = '0.h'
     BACKENDS_FILENAME = 'backends'
 
     def __init__(self, workdir=None, backends_filename=None, scheduler=None, storage=None):
@@ -94,7 +97,6 @@ class Weboob(object):
 
         # Repositories management
         self.repositories = Repositories(workdir, datadir, self.VERSION)
-
         # Backends loader
         self.modules_loader = ModulesLoader(self.repositories)
 
@@ -171,7 +173,7 @@ class Weboob(object):
         backend_instance = module.create_instance(self, module_name, params or {}, storage)
         return backend_instance
 
-    def load_backends(self, caps=None, names=None, modules=None, storage=None, errors=None):
+    def load_backends(self, caps=None, names=None, modules=None, exclude=None, storage=None, errors=None):
         """
         Load backends listed in config file.
 
@@ -181,6 +183,8 @@ class Weboob(object):
         :type names: tuple[:class:`str`]
         :param modules: load backends which module is in list
         :type modules: tuple[:class:`str`]
+        :param exclude: do not load modules in list
+        :type exclude: tuple[:class:`str`]
         :param storage: use this storage if specified
         :type storage: :class:`weboob.tools.storage.IStorage`
         :param errors: if specified, store every errors in this list
@@ -192,10 +196,15 @@ class Weboob(object):
         if storage is None:
             storage = self.storage
 
+        if not self.repositories.check_repositories():
+            self.logger.error(u'Repositories are not consistent with the sources.list')
+            raise VersionsMismatchError(u'Versions mismatch, please run "weboob-config update"')
+
         for instance_name, module_name, params in self.backends_config.iter_backends():
             if '_enabled' in params and not params['_enabled'].lower() in ('1', 'y', 'true', 'on', 'yes') or \
                names is not None and instance_name not in names or \
-               modules is not None and module_name not in modules:
+               modules is not None and module_name not in modules or \
+               exclude is not None and module_name in exclude:
                 continue
 
             minfo = self.repositories.get_module_info(module_name)
@@ -213,8 +222,8 @@ class Weboob(object):
             module = None
             try:
                 module = self.modules_loader.get_or_load_module(module_name)
-            except ModuleLoadError, e:
-                self.logger.error(e)
+            except ModuleLoadError as e:
+                self.logger.error(u'Unable to load module "%s": %s' % (module_name, e))
                 continue
 
             if instance_name in self.backend_instances:
@@ -223,7 +232,7 @@ class Weboob(object):
 
             try:
                 backend_instance = module.create_instance(self, instance_name, params, storage)
-            except BaseBackend.ConfigError, e:
+            except BaseBackend.ConfigError as e:
                 if errors is not None:
                     errors.append(self.LoadError(instance_name, e))
             else:
@@ -309,8 +318,6 @@ class Weboob(object):
         :type backends: list[:class:`str`]
         :param caps: iterate on backends which implement this caps
         :type caps: list[:class:`weboob.capabilities.base.IBaseCap`]
-        :param condition: a condition to validate results
-        :type condition: :class:`weboob.core.bcall.IResultsCondition`
         :rtype: A :class:`weboob.core.bcall.BackendsCall` object (iterable)
         """
         backends = self.backend_instances.values()
@@ -322,7 +329,7 @@ class Weboob(object):
                 if len(_backends) > 0:
                     try:
                         backends = [self.backend_instances[_backends]]
-                    except (ValueError,KeyError):
+                    except (ValueError, KeyError):
                         backends = []
             elif isinstance(_backends, (list, tuple, set)):
                 backends = []
@@ -330,7 +337,7 @@ class Weboob(object):
                     if isinstance(backend, basestring):
                         try:
                             backends.append(self.backend_instances[backend])
-                        except (ValueError,KeyError):
+                        except (ValueError, KeyError):
                             pass
                     else:
                         backends.append(backend)
@@ -340,13 +347,12 @@ class Weboob(object):
         if 'caps' in kwargs:
             caps = kwargs.pop('caps')
             backends = [backend for backend in backends if backend.has_caps(caps)]
-        condition = kwargs.pop('condition', None)
 
         # The return value MUST BE the BackendsCall instance. Please never iterate
         # here on this object, because caller might want to use other methods, like
         # wait() on callback_thread().
         # Thanks a lot.
-        return BackendsCall(backends, condition, function, *args, **kwargs)
+        return BackendsCall(backends, function, *args, **kwargs)
 
     def schedule(self, interval, function, *args):
         """

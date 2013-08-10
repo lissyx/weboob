@@ -1,10 +1,11 @@
 #!/bin/bash
 # This script is used to release a version.
+set -e
 
 function set_version {
-	echo -n "Replacing version in source files"
+	echo -n "Replacing version in source files to $1"
 	for fl in $(find . -iname "*.py"); do
-		sed "s/\(VERSION\|version\|release\) *= *[\"'][0-9]\+\..\+[\"'],?$/\1 = '$1'/g" $fl > $fl.new
+        sed "s/^\(\s*\)\(VERSION\|version\|release\)\( *\)=\( *\)[\"'][0-9]\+\..\+[\"']\(,\?\)$/\1\2\3=\4'$1'\5/g" $fl > $fl.new
 		diff $fl.new $fl >/dev/null && echo -n "." || echo -n "+"
 		cp -f $fl.new $fl
 		rm -f $fl.new
@@ -20,6 +21,7 @@ fi
 
 VERSION=$1
 
+export LANG=C
 mv ChangeLog ChangeLog.old
 echo -e "Weboob $VERSION (`date +%Y-%m-%d`)\n\t \n\n" > ChangeLog
 cat ChangeLog.old >> ChangeLog
@@ -29,9 +31,15 @@ vi +2 ChangeLog
 
 set_version $VERSION
 
+echo "Building Qt applications..."
+./setup.py sdist bdist clean -a || exit 1
+
 echo "Generating manpages..."
-tools/make_man.py
+tools/make_man.sh
 echo -e "done!\n"
+
+# in case there are new manpages not included in the git tree.
+git add man/*
 
 echo "Release commit:"
 git commit -a -m "Weboob $VERSION released"

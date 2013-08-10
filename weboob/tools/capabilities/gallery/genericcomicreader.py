@@ -17,14 +17,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 import re
 
 from weboob.capabilities.gallery import ICapGallery, BaseGallery, BaseImage
 from weboob.tools.backend import BaseBackend
 from weboob.tools.browser import BaseBrowser, BasePage
-from weboob.tools.test import BackendTest
 
 __all__ = ['GenericComicReaderBackend']
 
@@ -66,9 +65,9 @@ class GenericComicReaderBrowser(BaseBrowser):
 
 class GenericComicReaderBackend(BaseBackend, ICapGallery):
     NAME = 'genericcomicreader'
-    MAINTAINER = 'Noé Rubinstein'
+    MAINTAINER = u'Noé Rubinstein'
     EMAIL = 'noe.rubinstein@gmail.com'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'Generic comic reader backend; subclasses implement specific sites'
     LICENSE = 'AGPLv3+'
     BROWSER = GenericComicReaderBrowser
@@ -117,12 +116,3 @@ class GenericComicReaderBackend(BaseBackend, ICapGallery):
     OBJECTS = {
             BaseGallery: fill_gallery,
             BaseImage: fill_image}
-
-
-class GenericComicReaderTest(BackendTest):
-    def _test_download(self, _id):
-        g = self.backend.get_gallery(_id)
-        it = self.backend.iter_gallery_images(g)
-        it.next()
-        img = it.next()
-        self.backend.fillobj(img, ('url', 'data'))

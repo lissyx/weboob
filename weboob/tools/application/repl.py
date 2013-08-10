@@ -26,7 +26,7 @@ from optparse import OptionGroup, OptionParser, IndentedHelpFormatter
 import os
 import sys
 
-from weboob.capabilities.base import FieldNotFound, CapBaseObject, ObjectNotSupported
+from weboob.capabilities.base import FieldNotFound, CapBaseObject, UserError
 from weboob.core import CallErrors
 from weboob.tools.application.formatters.iformatter import MandatoryFieldsNotFound
 from weboob.tools.misc import to_unicode
@@ -69,6 +69,24 @@ class ReplOptionFormatter(IndentedHelpFormatter):
                 s += '    %s\n' % c
         return s
 
+def defaultcount(default_count=10):
+    def deco(f):
+        def inner(self, *args, **kwargs):
+            oldvalue = self.options.count
+            if self._is_default_count:
+                self.options.count = default_count
+
+            try:
+                return f(self, *args, **kwargs)
+            finally:
+                self.options.count = oldvalue
+
+        inner.__doc__ = f.__doc__
+        assert inner.__doc__ is not None, "A command must have a docstring"
+        inner.__doc__ += '\nDefault is limited to %s results.' % default_count
+
+        return inner
+    return deco
 
 class ReplApplication(Cmd, ConsoleApplication):
     """
@@ -116,8 +134,8 @@ class ReplApplication(Cmd, ConsoleApplication):
 
         results_options = OptionGroup(self._parser, 'Results Options')
         results_options.add_option('-c', '--condition', help='filter result items to display given a boolean expression')
-        results_options.add_option('-n', '--count', default='10', type='int',
-                                   help='get a maximum number of results (all backends merged)')
+        results_options.add_option('-n', '--count', type='int',
+                                   help='limit number of results (from each backends)')
         results_options.add_option('-s', '--select', help='select result item keys to display (comma separated)')
         self._parser.add_option_group(results_options)
 
@@ -131,6 +149,7 @@ class ReplApplication(Cmd, ConsoleApplication):
         self._parser.add_option_group(formatting_options)
 
         self._interactive = False
+        self._is_default_count = True
         self.working_path = WorkingPath()
         self._change_prompt()
 
@@ -174,7 +193,7 @@ class ReplApplication(Cmd, ConsoleApplication):
                     id = '%s@%s' % (obj.id, obj.backend)
         try:
             return ConsoleApplication.parse_id(self, id, unique_backend)
-        except BackendNotGiven, e:
+        except BackendNotGiven as e:
             backend_name = None
             while not backend_name:
                 print 'This command works with an unique backend. Availables:'
@@ -196,7 +215,7 @@ class ReplApplication(Cmd, ConsoleApplication):
 
             return id, backend_name
 
-    def get_object(self, _id, method, fields=None):
+    def get_object(self, _id, method, fields=None, caps=None):
         if self.interactive:
             try:
                 obj = self.objects[int(_id) - 1]
@@ -206,19 +225,22 @@ class ReplApplication(Cmd, ConsoleApplication):
                 try:
                     backend = self.weboob.get_backend(obj.backend)
                     return backend.fillobj(obj, fields)
-                except ObjectNotSupported:
-                    pass
+                except UserError as e:
+                    self.bcall_error_handler(backend, e, '')
 
         _id, backend_name = self.parse_id(_id)
+        kargs = {}
+        if caps is not None:
+            kargs = {'caps': caps}
         backend_names = (backend_name,) if backend_name is not None else self.enabled_backends
-        for backend, obj in self.do(method, _id, backends=backend_names):
-            if obj:
-                try:
-                    backend.fillobj(obj, fields)
-                except ObjectNotSupported:
-                    pass
 
+        # if backend's service returns several objects, try to find the one
+        # with wanted ID. If not found, get the last object.
+        obj = None
+        for backend, obj in self.do(method, _id, backends=backend_names, fields=fields, **kargs):
+            if obj and obj.id == _id:
                 return obj
+        return obj
 
     def get_object_list(self, method=None):
         # return cache if not empty
@@ -245,9 +267,6 @@ class ReplApplication(Cmd, ConsoleApplication):
     def main(self, argv):
         cmd_args = argv[1:]
         if cmd_args:
-            if cmd_args[0] == 'help':
-                self._parser.print_help()
-                self._parser.exit()
             cmd_line = u' '.join(cmd_args)
             cmds = cmd_line.split(';')
             for cmd in cmds:
@@ -286,8 +305,7 @@ class ReplApplication(Cmd, ConsoleApplication):
         """
         backends = kwargs.pop('backends', None)
         kwargs['backends'] = self.enabled_backends if backends is None else backends
-        kwargs['condition'] = self.condition
-        fields = self.selected_fields
+        fields = kwargs.pop('fields', self.selected_fields) or self.selected_fields
         if '$direct' in fields:
             fields = []
         elif '$full' in fields:
@@ -318,6 +336,23 @@ class ReplApplication(Cmd, ConsoleApplication):
             stop = None
         return stop
 
+    def parseline(self, line):
+        """
+        This REPL method is overrided to search "short" alias of commands
+        """
+        cmd, arg, ignored = Cmd.parseline(self, line)
+
+        if cmd is not None:
+            names = set(name for name in self.get_names() if name.startswith('do_'))
+
+            if 'do_' + cmd not in names:
+                long = set(name for name in names if name.startswith('do_' + cmd))
+                # if more than one result, ambiguous command, do nothing (error will display suggestions)
+                if len(long) == 1:
+                    cmd = long.pop()[3:]
+
+        return cmd, arg, ignored
+
     def onecmd(self, line):
         """
         This REPL method is overrided to catch some particular exceptions.
@@ -335,11 +370,11 @@ class ReplApplication(Cmd, ConsoleApplication):
         try:
             try:
                 return super(ReplApplication, self).onecmd(line)
-            except CallErrors, e:
+            except CallErrors as e:
                 self.bcall_errors_handler(e)
-            except BackendNotGiven, e:
+            except BackendNotGiven as e:
                 print >>sys.stderr, 'Error: %s' % str(e)
-            except NotEnoughArguments, e:
+            except NotEnoughArguments as e:
                 print >>sys.stderr, 'Error: not enough arguments. %s' % str(e)
             except (KeyboardInterrupt, EOFError):
                 # ^C during a command process doesn't exit application.
@@ -356,6 +391,11 @@ class ReplApplication(Cmd, ConsoleApplication):
 
     def default(self, line):
         print >>sys.stderr, 'Unknown command: "%s"' % line
+        cmd, arg, ignore = Cmd.parseline(self, line)
+        if cmd is not None:
+            names = set(name[3:] for name in self.get_names() if name.startswith('do_' + cmd))
+            if len(names) > 0:
+                print >>sys.stderr, 'Do you mean: %s?' % ', '.join(names)
         return 2
 
     def completenames(self, text, *ignored):
@@ -408,16 +448,13 @@ class ReplApplication(Cmd, ConsoleApplication):
 
         This method can be overrided to support more exceptions types.
         """
-        if isinstance(error, ResultsConditionError):
-            print >>sys.stderr, u'Error(%s): condition error: %s' % (backend.name, error)
-        else:
-            return super(ReplApplication, self).bcall_error_handler(backend, error, backtrace)
+        return super(ReplApplication, self).bcall_error_handler(backend, error, backtrace)
 
-    def bcall_errors_handler(self, errors):
+    def bcall_errors_handler(self, errors, ignore=()):
         if self.interactive:
-            ConsoleApplication.bcall_errors_handler(self, errors, 'Use "logging debug" option to print backtraces.')
+            ConsoleApplication.bcall_errors_handler(self, errors, 'Use "logging debug" option to print backtraces.', ignore)
         else:
-            ConsoleApplication.bcall_errors_handler(self, errors)
+            ConsoleApplication.bcall_errors_handler(self, errors, ignore=ignore)
 
     # -- options related methods -------------
     def _handle_options(self):
@@ -431,36 +468,42 @@ class ReplApplication(Cmd, ConsoleApplication):
         else:
             self.selected_fields = ['$direct']
 
-        if self.options.condition:
-            self.condition = ResultsCondition(self.options.condition)
-        else:
-            self.condition = None
 
-        if self.options.count == 0:
-            self._parser.error('Count must be at least 1, or negative for infinite')
-        elif self.options.count < 0:
+        if self.options.count is not None:
+            self._is_default_count = False
+        if self.options.count <= 0:
             # infinite search
             self.options.count = None
+
+        if self.options.condition:
+            self.condition = ResultsCondition(self.options.condition)
+            # Enable infinite search by default is condition is set
+            # (count applies on the non-filtered result, and can be confusing for users)
+            if self._is_default_count:
+                self.options.count = None
+                self._is_default_count = False
+        else:
+            self.condition = None
 
         return super(ReplApplication, self)._handle_options()
 
     def get_command_help(self, command, short=False):
         try:
-            doc = getattr(self, 'do_' + command).__doc__
+            func = getattr(self, 'do_' + command)
         except AttributeError:
             return None
-        if not doc:
-            return '%s' % command
 
-        doc = '\n'.join(line.strip() for line in doc.strip().split('\n'))
-        if not doc.startswith(command):
-            doc = '%s\n\n%s' % (command, doc)
+        doc = func.__doc__
+        assert doc is not None, "A command must have a docstring"
+
+        lines = [line.strip() for line in doc.strip().split('\n')]
+        if not lines[0].startswith(command):
+            lines = [command, ''] + lines
+
         if short:
-            doc = doc.split('\n')[0]
-            if not doc.startswith(command):
-                doc = command
+            return lines[0]
 
-        return doc
+        return '\n'.join(lines)
 
     def get_commands_doc(self):
         names = set(name for name in self.get_names() if name.startswith('do_'))
@@ -471,10 +514,8 @@ class ReplApplication(Cmd, ConsoleApplication):
             cmd = name[3:]
             if cmd in self.hidden_commands.union(self.weboob_commands).union(['help']):
                 continue
-            elif getattr(self, name).__doc__:
-                d[appname].append(self.get_command_help(cmd))
-            else:
-                d[appname].append(cmd)
+
+            d[appname].append(self.get_command_help(cmd))
         if not self.DISABLE_REPL:
             for cmd in self.weboob_commands:
                 d['Weboob'].append(self.get_command_help(cmd))
@@ -497,6 +538,11 @@ class ReplApplication(Cmd, ConsoleApplication):
         return self.do_quit(arg)
 
     def do_help(self, arg=None):
+        """
+        help [COMMAND]
+
+        List commands, or get information about a command.
+        """
         if arg:
             cmd_names = set(name[3:] for name in self.get_names() if name.startswith('do_'))
             if arg in cmd_names:
@@ -504,7 +550,9 @@ class ReplApplication(Cmd, ConsoleApplication):
                 if command_help is None:
                     logging.warning(u'Command "%s" is undocumented' % arg)
                 else:
-                    self.stdout.write('%s\n' % command_help)
+                    lines = command_help.split('\n')
+                    lines[0] = '%s%s%s' % (self.BOLD, lines[0], self.NC)
+                    self.stdout.write('%s\n' % '\n'.join(lines))
             else:
                 print >>sys.stderr, 'Unknown command: "%s"' % arg
         else:
@@ -716,7 +764,7 @@ class ReplApplication(Cmd, ConsoleApplication):
             else:
                 try:
                     self.condition = ResultsCondition(line)
-                except ResultsConditionError, e:
+                except ResultsConditionError as e:
                     print >>sys.stderr, '%s' % e
                     return 2
         else:
@@ -739,6 +787,7 @@ class ReplApplication(Cmd, ConsoleApplication):
         if line:
             if line == 'off':
                 self.options.count = None
+                self._is_default_count = False
             else:
                 try:
                     count = int(line)
@@ -748,6 +797,7 @@ class ReplApplication(Cmd, ConsoleApplication):
                 else:
                     if count > 0:
                         self.options.count = count
+                        self._is_default_count = False
                     else:
                         print >>sys.stderr, 'Number must be at least 1.'
                         return 2
@@ -889,13 +939,17 @@ class ReplApplication(Cmd, ConsoleApplication):
 
     def do_ls(self, line):
         """
-        ls [PATH]
+        ls [-d] [PATH]
 
         List objects in current path.
         If an argument is given, list the specified path.
         """
-
-        path = line.strip()
+        if line.strip().partition(' ')[0] == '-d':
+            path = None
+            only = line.strip().partition(' ')[2]
+        else:
+            path = line.strip()
+            only = False
 
         if path:
             # We have an argument, let's ch to the directory before the ls
@@ -903,25 +957,28 @@ class ReplApplication(Cmd, ConsoleApplication):
 
         objects, collections = self._fetch_objects(objs=self.COLLECTION_OBJECTS)
 
-        self.start_format()
         self.objects = []
-        for obj in objects:
-            if isinstance(obj, CapBaseObject):
-                self.cached_format(obj)
-            else:
-                print obj
 
+        self.start_format()
         for collection in collections:
-            if collection.basename and collection.title:
-                print u'%s~ (%s) %s (%s)%s' % \
-                (self.BOLD, collection.basename, collection.title, collection.backend, self.NC)
-            else:
-                print u'%s~ (%s) (%s)%s' % \
-                (self.BOLD, collection.basename, collection.backend, self.NC)
+            if only is False or collection.basename in only:
+                if collection.basename and collection.title:
+                    print u'%s~ (%s) %s (%s)%s' % \
+                    (self.BOLD, collection.basename, collection.title, collection.backend, self.NC)
+                else:
+                    print u'%s~ (%s) (%s)%s' % \
+                    (self.BOLD, collection.basename, collection.backend, self.NC)
+
+        for obj in objects:
+            if only is False or not hasattr(obj, 'id') or obj.id in only:
+                if isinstance(obj, CapBaseObject):
+                    self.cached_format(obj)
+                else:
+                    print obj
 
         if path:
             # Let's go back to the parent directory
-            self.working_path.home()
+            self.working_path.restore()
         else:
             # Save collections only if we listed the current path.
             self.collections = collections
@@ -948,12 +1005,9 @@ class ReplApplication(Cmd, ConsoleApplication):
                                                           caps=ICapCollection):
                 if res:
                     collections.append(res)
-        except CallErrors, errors:
-            for backend, error, backtrace in errors.errors:
-                if isinstance(error, CollectionNotFound):
-                    pass
-                else:
-                    self.bcall_error_handler(backend, error, backtrace)
+        except CallErrors as errors:
+            self.bcall_errors_handler(errors, CollectionNotFound)
+
         if len(collections):
             # update the path from the collection if possible
             if len(collections) == 1:
@@ -977,12 +1031,8 @@ class ReplApplication(Cmd, ConsoleApplication):
                     collections.append(res)
                 else:
                     objects.append(res)
-        except CallErrors, errors:
-            for backend, error, backtrace in errors.errors:
-                if isinstance(error, CollectionNotFound):
-                    pass
-                else:
-                    self.bcall_error_handler(backend, error, backtrace)
+        except CallErrors as errors:
+            self.bcall_errors_handler(errors, CollectionNotFound)
 
         return (objects, collections)
 
@@ -1005,12 +1055,8 @@ class ReplApplication(Cmd, ConsoleApplication):
         if len(self.objects) == 0 and len(self.collections) == 0:
             try:
                 self.objects, self.collections = self._fetch_objects(objs=self.COLLECTION_OBJECTS)
-            except CallErrors, errors:
-                for backend, error, backtrace in errors.errors:
-                    if isinstance(error, CollectionNotFound):
-                        pass
-                    else:
-                        self.bcall_error_handler(backend, error, backtrace)
+            except CallErrors as errors:
+                self.bcall_errors_handler(errors, CollectionNotFound)
 
         collections = self.all_collections()
         for collection in collections:
@@ -1033,7 +1079,7 @@ class ReplApplication(Cmd, ConsoleApplication):
         """
         try:
             self.formatter = self.formatters_loader.build_formatter(name)
-        except FormatterLoadError, e:
+        except FormatterLoadError as e:
             print >>sys.stderr, '%s' % e
             if self.DEFAULT_FORMATTER == name:
                 self.DEFAULT_FORMATTER = ReplApplication.DEFAULT_FORMATTER
@@ -1065,13 +1111,16 @@ class ReplApplication(Cmd, ConsoleApplication):
 
     def format(self, result, alias=None):
         fields = self.selected_fields
+        # Do not format objects if they not respect conditions
+        if self.condition and not self.condition.is_valid(result):
+            return
         if '$direct' in fields or '$full' in fields:
             fields = None
         try:
             self.formatter.format(obj=result, selected_fields=fields, alias=alias)
-        except FieldNotFound, e:
+        except FieldNotFound as e:
             print >>sys.stderr, e
-        except MandatoryFieldsNotFound, e:
+        except MandatoryFieldsNotFound as e:
             print >>sys.stderr, '%s Hint: select missing fields or use another formatter (ex: multiline).' % e
 
     def flush(self):

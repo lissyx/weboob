@@ -17,8 +17,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from weboob.capabilities.torrent import ICapTorrent, MagnetOnly
-from weboob.tools.backend import BaseBackend
+from weboob.capabilities.torrent import ICapTorrent, MagnetOnly, Torrent
+from weboob.tools.backend import BaseBackend, BackendConfig
+from weboob.tools.value import Value
 from weboob.capabilities.base import NotAvailable
 
 from .browser import PiratebayBrowser
@@ -26,17 +27,19 @@ from .browser import PiratebayBrowser
 
 __all__ = ['PiratebayBackend']
 
+
 class PiratebayBackend(BaseBackend, ICapTorrent):
     NAME = 'piratebay'
-    MAINTAINER = 'Julien Veyssier'
+    MAINTAINER = u'Julien Veyssier'
     EMAIL = 'julien.veyssier@aiur.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'The Pirate Bay BitTorrent tracker'
     LICENSE = 'AGPLv3+'
     BROWSER = PiratebayBrowser
+    CONFIG = BackendConfig(Value('proxybay', label='Use a Proxy Bay', regexp=r'https?://.*', default='', required=False))
 
     def create_default_browser(self):
-        return self.create_browser()
+        return self.create_browser(self.config['proxybay'].get())
 
     def get_torrent(self, id):
         return self.browser.get_torrent(id)
@@ -52,3 +55,14 @@ class PiratebayBackend(BaseBackend, ICapTorrent):
 
     def iter_torrents(self, pattern):
         return self.browser.iter_torrents(pattern.replace(' ', '+'))
+
+    def fill_torrent(self, torrent, fields):
+        if 'description' in fields or 'files' in fields:
+            tor = self.get_torrent(torrent.id)
+            torrent.description = tor.description
+            torrent.magnet = tor.magnet
+            torrent.files = tor.files
+            torrent.url = tor.url
+        return torrent
+
+    OBJECTS = {Torrent: fill_torrent}

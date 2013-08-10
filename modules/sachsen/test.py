@@ -29,8 +29,12 @@ class SachsenTest(BackendTest):
         self.assertTrue(len(l) > 0)
 
         gauge = l[0]
-        history = list(self.backend.iter_gauge_history(gauge.id))
 
+        sensors = list(self.backend.iter_sensors(gauge))
+        self.assertTrue(len(sensors) > 0)
+        sensor = sensors[0]
+
+        history = list(self.backend.iter_gauge_history(sensor))
         self.assertTrue(len(history) > 0)
 
-        self.assertTrue(self.backend.get_last_measure(gauge.id) is not None)
+        self.assertTrue(self.backend.get_last_measure(sensor) is not None)

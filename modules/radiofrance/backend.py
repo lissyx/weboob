@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.base import NotLoaded
 from weboob.capabilities.video import ICapVideo
@@ -33,9 +33,9 @@ __all__ = ['RadioFranceBackend']
 
 class RadioFranceBackend(BaseBackend, ICapRadio, ICapCollection, ICapVideo):
     NAME = 'radiofrance'
-    MAINTAINER = 'Laurent Bachelier'
+    MAINTAINER = u'Laurent Bachelier'
     EMAIL = 'laurent@bachelier.name'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = u'Radios of Radio France: Inter, Info, Bleu, Culture, Musique, FIP, Le Mouv\''
     LICENSE = 'AGPLv3+'
     BROWSER = RadioFranceBrowser
@@ -193,7 +193,7 @@ class RadioFranceBackend(BaseBackend, ICapRadio, ICapCollection, ICapVideo):
     def fill_video(self, video, fields):
         if 'url' in fields:
             with self.browser:
-                video.url = self.browser.get_url(video.id)
+                video.url = unicode(self.browser.get_url(video.id))
 
         return video
 

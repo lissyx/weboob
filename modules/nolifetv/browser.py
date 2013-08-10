@@ -33,30 +33,33 @@ __all__ = ['NolifeTVBrowser']
 
 class NolifeTVBrowser(BaseBrowser):
     DOMAIN = 'online.nolife-tv.com'
-    ENCODING = None
+    ENCODING = 'utf-8'
     PAGES = {r'http://online.nolife-tv.com/index.php\??': IndexPage,
              r'http://online.nolife-tv.com/': IndexPage,
-             r'http://online.nolife-tv.com/index.php\?id=(?P<id>.+)': VideoPage}
+             r'http://online.nolife-tv.com/do.php': IndexPage,
+             r'http://online.nolife-tv.com/emission-(?P<id>[^/]+)/?.*': VideoPage}
 
     def is_logged(self):
         if self.password is None:
             return True
 
-        login = self.page.document.getroot().cssselect('div#form_login')
-        return len(login) == 0
+        if not self.page:
+            return False
+
+        l = self.page.document.xpath('//form[@name="login"]')
+        return len(l) == 0
 
     def login(self):
         if self.password is None:
             return
 
-        params = {'cookieuser':        1,
-                  'do':                'login',
-                  'securitytoken':     'guest',
-                  'vb_login_username': self.username,
-                  'vb_login_password': self.password,
+        params = {'cookieuser':  1,
+                  'login':       1,
+                  'username':    self.username,
+                  'password':    self.password,
                  }
 
-        self.readurl('http://forum.nolife-tv.com/login.php?do=login', urllib.urlencode(params))
+        self.readurl('http://online.nolife-tv.com/login', urllib.urlencode(params))
 
         self.location('/', no_login=True)
 
@@ -70,11 +73,18 @@ class NolifeTVBrowser(BaseBrowser):
         return self.page.get_video(video)
 
     def search_videos(self, pattern):
-        self.location('/index.php?', 'search=%s' % urllib.quote_plus(pattern.encode('utf-8')))
+        data = {'a':        'search',
+                'search':   pattern.encode('utf-8'),
+                'vu':       'all',
+               }
+        self.openurl('/do.php', urllib.urlencode(data))
+        self.location('/do.php', 'a=em')
+
         assert self.is_on_page(IndexPage)
         return self.page.iter_videos()
 
     def latest_videos(self):
-        self.home()
+        self.location('/do.php', 'a=em')
+
         assert self.is_on_page(IndexPage)
         return self.page.iter_videos()

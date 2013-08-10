@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.housing import ICapHousing, City, Housing, HousingPhoto
 from weboob.tools.backend import BaseBackend
@@ -32,7 +32,7 @@ class SeLogerBackend(BaseBackend, ICapHousing):
     NAME = 'seloger'
     MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'French housing website'
     LICENSE = 'AGPLv3+'
     ICON = 'http://static.poliris.com/z/portail/svx/portals/sv6_gen/favicon.png'
@@ -67,7 +67,7 @@ class SeLogerBackend(BaseBackend, ICapHousing):
                     if not 'value' in city:
                         continue
                     c = City(city['value'])
-                    c.name = city['label']
+                    c.name = unicode(city['label'])
                     yield c
 
     def fill_housing(self, housing, fields):

@@ -29,14 +29,13 @@ __all__ = ['NewsfeedBackend']
 
 class NewsfeedBackend(BaseBackend, ICapMessages):
     NAME = 'newsfeed'
-    MAINTAINER = u"Clément Schreiner"
+    MAINTAINER = u'Clément Schreiner'
     EMAIL = "clemux@clemux.info"
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = "Loads RSS and Atom feeds from any website"
     LICENSE = "AGPLv3+"
     CONFIG = BackendConfig(Value('url', label="Atom/RSS feed's url", regexp='https?://.*'))
     STORAGE = {'seen': []}
-
 
     def iter_threads(self):
         for article in Newsfeed(self.config['url'].get()).iter_entries():
@@ -57,10 +56,11 @@ class NewsfeedBackend(BaseBackend, ICapMessages):
         flags = Message.IS_HTML
         if not thread.id in self.storage.get('seen', default=[]):
             flags |= Message.IS_UNREAD
-        if len(entry.content):
-            content = entry.content[0]
+        if len(entry.content) > 0:
+            content = u"<p>Link %s</p> %s" % (entry.link, entry.content[0])
         else:
             content = entry.link
+
         thread.title = entry.title
         thread.root = Message(thread=thread,
                               id=0,
@@ -74,14 +74,11 @@ class NewsfeedBackend(BaseBackend, ICapMessages):
                               flags=flags)
         return thread
 
-
-
     def iter_unread_messages(self):
         for thread in self.iter_threads():
             for m in thread.iter_all_messages():
                 if m.flags & m.IS_UNREAD:
                     yield m
-
 
     def set_message_read(self, message):
         self.storage.get('seen', default=[]).append(message.thread.id)

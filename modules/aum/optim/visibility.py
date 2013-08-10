@@ -21,8 +21,6 @@
 from weboob.tools.browser import BrowserUnavailable
 from weboob.capabilities.dating import Optimization
 
-from ..browser import AuMBrowser
-
 
 __all__ = ['Visibility']
 
@@ -47,9 +45,8 @@ class Visibility(Optimization):
 
     def reconnect(self):
         try:
-            AuMBrowser(self.browser.username,
-                        self.browser.password,
-                        proxy=self.browser.proxy)
-        except BrowserUnavailable, e:
+            with self.browser:
+                self.browser.login()
+        except BrowserUnavailable as e:
             print str(e)
             pass

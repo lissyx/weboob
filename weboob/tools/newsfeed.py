@@ -18,7 +18,12 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 import datetime
-import feedparser
+
+try:
+    import feedparser
+except ImportError:
+    raise ImportError('Please install python-feedparser')
+
 if feedparser.__version__ >= '5.0':
     # feedparser >= 5.0 replaces this regexp on sgmllib and mechanize < 2.0
     # fails with malformated webpages.
@@ -53,6 +58,8 @@ class Entry(object):
 
         if "updated_parsed" in entry:
             self.datetime = datetime.datetime(*entry['updated_parsed'][:7])
+        elif "published_parsed" in entry:
+            self.datetime = datetime.datetime(*entry['published_parsed'][:7])
         else:
             self.datetime = None
 

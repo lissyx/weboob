@@ -33,6 +33,8 @@ from .pages.wiki import WikiEditPage
 from .tools import id2url, url2id
 
 # Browser
+
+
 class DLFP(BaseBrowser):
     DOMAIN = 'linuxfr.org'
     PROTOCOL = 'https'
@@ -133,8 +135,11 @@ class DLFP(BaseBrowser):
 
     def get_hash(self, url):
         self.location(url)
-        myhash = hashlib.md5(lxml.etree.tostring(self.page.document)).hexdigest()
-        return myhash
+        if self.page.document.xpath('//entry'):
+            myhash = hashlib.md5(lxml.etree.tostring(self.page.document)).hexdigest()
+            return myhash
+        else:
+            return None
 
     def get_content(self, _id):
         url, _id = self.parse_id(_id)
@@ -184,7 +189,7 @@ class DLFP(BaseBrowser):
 
         try:
             self.submit()
-        except BrowserHTTPError, e:
+        except BrowserHTTPError as e:
             raise CantSendMessage('Unable to send message to %s.%s: %s' % (thread, reply_id, e))
 
         if self.is_on_page(NodePage):
@@ -195,6 +200,9 @@ class DLFP(BaseBrowser):
         return None
 
     def login(self):
+        if self.username is None:
+            return
+
         # not usefull for the moment
         #self.location('/', no_login=True)
         data = {'account[login]': self.username,
@@ -207,10 +215,10 @@ class DLFP(BaseBrowser):
             raise BrowserIncorrectPassword()
 
     def is_logged(self):
-        return (self.page and self.page.is_logged())
+        return (self.username is None or (self.page and self.page.is_logged()))
 
     def close_session(self):
-        self.openurl('/compte/deconnexion', {})
+        self.openurl('/compte/deconnexion', '')
 
     def plusse(self, url):
         return self.relevance(url, 'for')

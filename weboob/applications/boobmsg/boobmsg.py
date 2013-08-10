@@ -30,7 +30,7 @@ from weboob.core import CallErrors
 from weboob.capabilities.messages import ICapMessages, Message, Thread
 from weboob.capabilities.account import ICapAccount
 from weboob.capabilities.contact import ICapContact, Contact
-from weboob.tools.application.repl import ReplApplication
+from weboob.tools.application.repl import ReplApplication, defaultcount
 from weboob.tools.application.formatters.iformatter import IFormatter
 from weboob.tools.misc import html2text
 
@@ -100,7 +100,7 @@ class XHtmlFormatter(IFormatter):
         result  = "<div>\n"
         result += "<h1>%s</h1>" % (obj.title)
         result += "<dl>"
-        result += "<dt>Date</dt><dd>%s</dd>" % (obj.date)
+        result += "<dt>Date</dt><dd>%s</dd>" % (obj.date.strftime('%Y-%m-%d %H:%M'))
         result += "<dt>Sender</dt><dd>%s</dd>" % (obj.sender)
         result += "<dt>Signature</dt><dd>%s</dd>" % (obj.signature)
         result += "</dl>"
@@ -116,7 +116,7 @@ class MessageFormatter(IFormatter):
         result = u'%sTitle:%s %s\n' % (self.BOLD,
                                        self.NC, obj.title)
         result += u'%sDate:%s %s\n' % (self.BOLD,
-                                       self.NC, obj.date)
+                                       self.NC, obj.date.strftime('%Y-%m-%d %H:%M'))
         result += u'%sFrom:%s %s\n' % (self.BOLD,
                                        self.NC, obj.sender)
         if hasattr(obj, 'receivers') and obj.receivers:
@@ -212,8 +212,8 @@ class MessagesListFormatter(IFormatter):
                                                            message.thread.id,
                                                            message.id,
                                                            backend,
-                                                           flags,
                                                            self.NC,
+                                                           flags,
                                                            message.sender,
                                                            message.title)
         if message.children:
@@ -267,10 +267,11 @@ class ProfileFormatter(IFormatter):
 
 class Boobmsg(ReplApplication):
     APPNAME = 'boobmsg'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2011 Christophe Benz'
     DESCRIPTION = "Console application allowing to send messages on various websites and " \
                   "to display message threads and contents."
+    SHORT_DESCRIPTION = "send and receive message threads"
     CAPS = ICapMessages
     EXTRA_FORMATTERS = {'msglist':  MessagesListFormatter,
                         'msg':      MessageFormatter,
@@ -372,7 +373,7 @@ class Boobmsg(ReplApplication):
 
             try:
                 self.do('post_message', message, backends=backend_name).wait()
-            except CallErrors, errors:
+            except CallErrors as errors:
                 self.bcall_errors_handler(errors)
             else:
                 if self.interactive:
@@ -381,6 +382,7 @@ class Boobmsg(ReplApplication):
     threads = []
     messages = []
 
+    @defaultcount(10)
     def do_list(self, arg):
         """
         list
@@ -416,7 +418,6 @@ class Boobmsg(ReplApplication):
             else:
                 self.threads.append(thread)
             self.format(thread)
-        self.flush()
 
     def do_export_all(self, arg):
         """
@@ -436,13 +437,12 @@ class Boobmsg(ReplApplication):
         self.start_format()
         for backend, msg in self.do(func):
             self.format(msg)
-        self.flush()
 
     def do_export_thread(self, arg):
         """
-        export_thread
+        export_thread ID
 
-        Export a thread
+        Export the thread identified by ID
         """
         _id, backend_name = self.parse_id(arg)
         cmd = self.do('get_thread', _id, backends=backend_name)
@@ -451,7 +451,6 @@ class Boobmsg(ReplApplication):
             if thread is not None :
                 for msg in thread.iter_all_messages():
                     self.format(msg)
-        self.flush()
 
     def do_show(self, arg):
         """
@@ -459,6 +458,7 @@ class Boobmsg(ReplApplication):
 
         Read a message
         """
+        message = None
         if len(arg) == 0:
             print >>sys.stderr, 'Please give a message ID.'
             return 2
@@ -467,14 +467,15 @@ class Boobmsg(ReplApplication):
             message = self.messages[int(arg) - 1]
         except (IndexError, ValueError):
             id, backend_name = self.parse_id(arg)
-        else:
+            cmd = self.do('get_thread', id, backends=backend_name)
+            for backend, thread in cmd:
+                if thread is not None:
+                    message = thread.root
+        if message is not None:
+            self.start_format()
             self.format(message)
             self.weboob.do('set_message_read', message, backends=message.backend)
             return
-
-        if not self.interactive:
-            print >>sys.stderr,  'Oops, you need to be in interactive mode to read messages'
-            return 1
         else:
             print >>sys.stderr,  'Message not found'
             return 3
@@ -495,8 +496,6 @@ class Boobmsg(ReplApplication):
 
         if not found:
             self.logger.error(u'Profile not found')
-        else:
-            self.flush()
 
     def do_photos(self, id):
         """
@@ -530,5 +529,3 @@ class Boobmsg(ReplApplication):
 
         if not found:
             self.logger.error(u'Profile not found')
-        else:
-            self.flush()

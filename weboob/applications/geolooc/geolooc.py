@@ -29,9 +29,10 @@ __all__ = ['Geolooc']
 
 class Geolooc(ReplApplication):
     APPNAME = 'geolooc'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2011 Romain Bignon'
-    DESCRIPTION = 'Console application allowing to geolocalize IP addresses.'
+    DESCRIPTION = "Console application allowing to geolocalize IP addresses."
+    SHORT_DESCRIPTION = "geolocalize IP addresses"
     CAPS = ICapGeolocIp
 
     def main(self, argv):

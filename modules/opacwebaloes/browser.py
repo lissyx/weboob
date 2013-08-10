@@ -55,23 +55,23 @@ class AloesBrowser(BaseBrowser):
         assert isinstance(self.username, basestring)
         assert isinstance(self.password, basestring)
         if not self.is_on_page(HomePage):
-            self.location('%s://%s/index.aspx' \
+            self.location('%s://%s/index.aspx'
                           % (self.PROTOCOL, self.BASEURL),
                           no_login=True)
-        if  not self.page.login(self.username, self.password) or \
+        if not self.page.login(self.username, self.password) or \
             not self.is_logged() or \
-            (self.is_on_page(LoginPage) and self.page.is_error()):
+                (self.is_on_page(LoginPage) and self.page.is_error()):
                 raise BrowserIncorrectPassword()
 
     def get_rented_books_list(self):
         if not self.is_on_page(RentedPage):
-            self.location('%s://%s/index.aspx?IdPage=45' \
+            self.location('%s://%s/index.aspx?IdPage=45'
                       % (self.PROTOCOL, self.BASEURL)
                       )
         return self.page.get_list()
 
     def get_booked_books_list(self):
         if not self.is_on_page(BookedPage):
-            self.location('%s://%s/index.aspx?IdPage=44' \
+            self.location('%s://%s/index.aspx?IdPage=44'
                           % (self.PROTOCOL, self.BASEURL))
         return self.page.get_list()

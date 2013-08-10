@@ -18,9 +18,6 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-# python2.5 compatibility
-from __future__ import with_statement
-
 from weboob.capabilities.bank import ICapBank, AccountNotFound
 from weboob.tools.backend import BaseBackend, BackendConfig
 from weboob.tools.value import ValueBackendPassword
@@ -33,9 +30,9 @@ __all__ = ['FortuneoBackend']
 
 class FortuneoBackend(BaseBackend, ICapBank):
     NAME = 'fortuneo'
-    MAINTAINER = 'Gilles-Alexandre Quenot'
+    MAINTAINER = u'Gilles-Alexandre Quenot'
     EMAIL = 'gilles.quenot@gmail.com'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = u'Fortuneo French bank website'
     CONFIG = BackendConfig(

@@ -17,17 +17,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from copy import copy
 from httplib import BadStatusLine
 from logging import warning
-import mechanize
+
+try:
+    import mechanize
+except ImportError:
+    raise ImportError('Please install python-mechanize')
+
 import os
 import sys
 import re
 import tempfile
 from threading import RLock
+import ssl
+import httplib
+import socket
+import hashlib
 import time
 import urllib
 import urllib2
@@ -35,6 +44,7 @@ from urlparse import urlsplit
 import mimetypes
 from contextlib import closing
 from gzip import GzipFile
+import warnings
 
 from weboob.tools.decorators import retry
 from weboob.tools.log import getLogger
@@ -45,14 +55,14 @@ from weboob.tools.parsers import get_parser
 # Try to load cookies
 try:
     from .firefox_cookies import FirefoxCookieJar
-except ImportError, e:
+except ImportError as e:
     warning("Unable to store cookies: %s" % e)
     HAVE_COOKIES = False
 else:
     HAVE_COOKIES = True
 
 
-__all__ = ['BrowserIncorrectPassword', 'BrowserBanned', 'BrowserUnavailable', 'BrowserRetry',
+__all__ = ['BrowserIncorrectPassword', 'BrowserForbidden', 'BrowserBanned', 'BrowserUnavailable', 'BrowserRetry',
            'BrowserHTTPNotFound', 'BrowserHTTPError', 'BrokenPageError', 'BasePage',
            'StandardBrowser', 'BaseBrowser']
 
@@ -62,8 +72,13 @@ class BrowserIncorrectPassword(Exception):
     pass
 
 
+class BrowserForbidden(Exception):
+    pass
+
+
 class BrowserBanned(BrowserIncorrectPassword):
     pass
+
 
 class BrowserPasswordExpired(BrowserIncorrectPassword):
     pass
@@ -72,8 +87,10 @@ class BrowserPasswordExpired(BrowserIncorrectPassword):
 class BrowserUnavailable(Exception):
     pass
 
+
 class BrowserHTTPNotFound(BrowserUnavailable):
     pass
+
 
 class BrowserHTTPError(BrowserUnavailable):
     pass
@@ -102,13 +119,24 @@ class NoHistory(object):
     def close(self):
         pass
 
+
 class BrokenPageError(Exception):
     pass
+
+
+class FormFieldConversionWarning(UserWarning):
+    """
+    A value has been set to a form's field and has been implicitly converted.
+    """
+
 
 class BasePage(object):
     """
     Base page
     """
+
+    ENCODING = None
+
     def __init__(self, browser, document, url='', groups=None, group_dict=None, logger=None):
         self.browser = browser
         self.parser = browser.parser
@@ -124,6 +152,7 @@ class BasePage(object):
         """
         pass
 
+
 def check_location(func):
     def inner(self, *args, **kwargs):
         if args and isinstance(args[0], basestring):
@@ -137,6 +166,7 @@ def check_location(func):
             args = (url,) + args[1:]
         return func(self, *args, **kwargs)
     return inner
+
 
 class StandardBrowser(mechanize.Browser):
     """
@@ -159,7 +189,7 @@ class StandardBrowser(mechanize.Browser):
 
     ENCODING = 'utf-8'
     USER_AGENTS = {
-        'desktop_firefox': 'Mozilla/5.0 (X11; U; Linux x86_64; fr; rv:1.9.2.13) Gecko/20101209 Fedora/3.6.13-1.fc13 Firefox/3.6.13',
+        'desktop_firefox': 'Mozilla/5.0 (X11; Linux x86_64; rv:17.0) Gecko/20100101 Firefox/17.0',
         'android': 'Mozilla/5.0 (Linux; U; Android 2.1; en-us; Nexus One Build/ERD62) AppleWebKit/530.17 (KHTML, like Gecko) Version/4.0 Mobile Safari/530.17',
         'microb': 'Mozilla/5.0 (X11; U; Linux armv7l; fr-FR; rv:1.9.2.3pre) Gecko/20100723 Firefox/3.5 Maemo Browser 1.7.4.8 RX-51 N900',
         'wget': 'Wget/1.11.4',
@@ -168,10 +198,13 @@ class StandardBrowser(mechanize.Browser):
     SAVE_RESPONSES = False
     DEBUG_HTTP = False
     DEBUG_MECHANIZE = False
-    DEFAULT_TIMEOUT = 10
+    DEFAULT_TIMEOUT = 15
+    INSECURE = False  # if True, do not validate SSL
 
     responses_dirname = None
     responses_count = 0
+
+    logger = None
 
     # ------ Browser methods ---------------------------------------
 
@@ -210,7 +243,7 @@ class StandardBrowser(mechanize.Browser):
 
         if parser is None:
             parser = get_parser()()
-        elif isinstance(parser, (tuple,list,str,unicode)):
+        elif isinstance(parser, (tuple,list,basestring)):
             parser = get_parser(parser)()
         self.parser = parser
         self.lock = RLock()
@@ -248,7 +281,7 @@ class StandardBrowser(mechanize.Browser):
         try:
             return self._openurl(*args, **kwargs)
         except (mechanize.BrowserStateError, mechanize.response_seek_wrapper,
-                urllib2.HTTPError, urllib2.URLError, BadStatusLine), e:
+                urllib2.HTTPError, urllib2.URLError, BadStatusLine, ssl.SSLError) as e:
             if isinstance(e, mechanize.BrowserStateError) and hasattr(self, 'home'):
                 self.home()
                 return self._openurl(*args, **kwargs)
@@ -256,15 +289,19 @@ class StandardBrowser(mechanize.Browser):
                 raise self.get_exception(e)('%s (url="%s")' % (e, args and args[0] or 'None'))
             else:
                 return None
-        except BrowserRetry, e:
+        except BrowserRetry as e:
             return self._openurl(*args, **kwargs)
 
     def get_exception(self, e):
-        if (isinstance(e, urllib2.HTTPError) and hasattr(e, 'getcode') and e.getcode() in (404, 403)) or \
-           isinstance(e, mechanize.BrowserStateError):
+        if isinstance(e, urllib2.HTTPError) and hasattr(e, 'getcode'):
+            if e.getcode() in (404, 403):
+                return BrowserHTTPNotFound
+            if e.getcode() == 401:
+                return BrowserIncorrectPassword
+        elif isinstance(e, mechanize.BrowserStateError):
             return BrowserHTTPNotFound
-        else:
-            return BrowserHTTPError
+
+        return BrowserHTTPError
 
     def readurl(self, url, *args, **kwargs):
         """
@@ -314,14 +351,22 @@ class StandardBrowser(mechanize.Browser):
         else:
             self.logger.info(msg)
 
-    def get_document(self, result):
+    def get_document(self, result, parser=None, encoding=None):
         """
         Get a parsed document from a stream.
 
         :param result: HTML page stream
         :type result: stream
         """
-        return self.parser.parse(result, self.ENCODING)
+        if parser is None:
+            parser = self.parser
+        elif isinstance(parser, (basestring, list, tuple)):
+            parser = get_parser(parser)()
+
+        if encoding is None:
+            encoding = self.ENCODING
+
+        return parser.parse(result, encoding)
 
     def location(self, *args, **kwargs):
         """
@@ -339,9 +384,9 @@ class StandardBrowser(mechanize.Browser):
 
         Example:
 
-        >>> buildurl('/blah.php', ('a', '&'), ('b', '=')
+        >>> StandardBrowser.buildurl('/blah.php', ('a', '&'), ('b', '='))
         '/blah.php?a=%26&b=%3D'
-        >>> buildurl('/blah.php', a='&', 'b'='=')
+        >>> StandardBrowser.buildurl('/blah.php', a='&', b='=')
         '/blah.php?b=%3D&a=%26'
         """
 
@@ -381,7 +426,7 @@ class StandardBrowser(mechanize.Browser):
                         if isinstance(is_list, (list, tuple)):
                             try:
                                 value = [self.str(is_list.index(args[label]))]
-                            except ValueError, e:
+                            except ValueError as e:
                                 if args[label]:
                                     print >>sys.stderr, '[%s] %s: %s' % (label, args[label], e)
                                 return
@@ -392,6 +437,30 @@ class StandardBrowser(mechanize.Browser):
                 self[field] = value
         except ControlNotFoundError:
             return
+
+    def lowsslcheck(self, domain, hsh):
+        certhash = self._certhash(domain)
+        if self.logger:
+            self.logger.debug('Found %s as certificate hash' % certhash)
+        if isinstance(hsh, basestring):
+            hsh = [hsh]
+        if certhash not in hsh:
+            raise ssl.SSLError()
+
+    def _certhash(self, domain, port=443):
+        certs = ssl.get_server_certificate((domain, port))
+        return hashlib.sha256(certs).hexdigest()
+
+    def __setitem__(self, key, value):
+        if isinstance(value, unicode):
+            value = value.encode(self.ENCODING or 'utf-8')
+            warnings.warn('Implicit conversion of form field %r from unicode to str' % key,
+                          FormFieldConversionWarning, stacklevel=2)
+        if self.form is None:
+            raise AttributeError('Please select a form before setting values to fields')
+        return self.form.__setitem__(key, value)
+
+
 
 class BaseBrowser(StandardBrowser):
     """
@@ -426,6 +495,10 @@ class BaseBrowser(StandardBrowser):
     DOMAIN = None
     PROTOCOL = 'http'
     PAGES = {}
+
+    # SHA-256 hash of server certificate. If set, it will automatically check it,
+    # and raise a SSLError exception if it doesn't match.
+    CERTHASH = None
 
     # ------ Abstract methods --------------------------------------
 
@@ -465,6 +538,9 @@ class BaseBrowser(StandardBrowser):
         self.username = username
         self.password = password
 
+        if not self.INSECURE and self.CERTHASH is not None and self.DOMAIN is not None:
+            self.lowsslcheck(self.DOMAIN, self.CERTHASH)
+
         if self.password and get_home:
             try:
                 self.home()
@@ -479,10 +555,10 @@ class BaseBrowser(StandardBrowser):
         nologin = kwargs.pop('nologin', False)
         try:
             self._change_location(mechanize.Browser.submit(self, *args, **kwargs), no_login=nologin)
-        except (mechanize.response_seek_wrapper, urllib2.HTTPError, urllib2.URLError, BadStatusLine), e:
+        except (mechanize.response_seek_wrapper, urllib2.HTTPError, urllib2.URLError, BadStatusLine, ssl.SSLError) as e:
             self.page = None
             raise self.get_exception(e)(e)
-        except (mechanize.BrowserStateError, BrowserRetry), e:
+        except (mechanize.BrowserStateError, BrowserRetry) as e:
             raise BrowserUnavailable(e)
 
     def is_on_page(self, pageCls):
@@ -511,10 +587,10 @@ class BaseBrowser(StandardBrowser):
         """
         try:
             self._change_location(mechanize.Browser.follow_link(self, *args, **kwargs))
-        except (mechanize.response_seek_wrapper, urllib2.HTTPError, urllib2.URLError, BadStatusLine), e:
+        except (mechanize.response_seek_wrapper, urllib2.HTTPError, urllib2.URLError, BadStatusLine, ssl.SSLError) as e:
             self.page = None
             raise self.get_exception(e)('%s (url="%s")' % (e, args and args[0] or 'None'))
-        except (mechanize.BrowserStateError, BrowserRetry), e:
+        except (mechanize.BrowserStateError, BrowserRetry) as e:
             self.home()
             raise BrowserUnavailable(e)
 
@@ -546,7 +622,7 @@ class BaseBrowser(StandardBrowser):
             if not self.page or not args or self.page.url != args[0]:
                 keep_kwargs['no_login'] = True
                 self.location(*keep_args, **keep_kwargs)
-        except (mechanize.response_seek_wrapper, urllib2.HTTPError, urllib2.URLError, BadStatusLine), e:
+        except (mechanize.response_seek_wrapper, urllib2.HTTPError, urllib2.URLError, BadStatusLine, ssl.SSLError) as e:
             self.page = None
             raise self.get_exception(e)('%s (url="%s")' % (e, args and args[0] or 'None'))
         except mechanize.BrowserStateError:
@@ -594,6 +670,7 @@ class BaseBrowser(StandardBrowser):
 
         # Find page from url
         pageCls = None
+        parser = None
         page_groups = None
         page_group_dict = None
         for key, value in self.PAGES.items():
@@ -606,7 +683,13 @@ class BaseBrowser(StandardBrowser):
                 regexp = key
             m = regexp.search(result.geturl())
             if m:
-                pageCls = value
+                if isinstance(value, (list, tuple)):
+                    pageCls = value[0]
+                    parser = value[1]
+                else:
+                    pageCls = value
+                    parser = self.parser
+
                 page_groups = m.groups()
                 page_group_dict = m.groupdict()
                 break
@@ -624,7 +707,7 @@ class BaseBrowser(StandardBrowser):
         if self.SAVE_RESPONSES:
             self.save_response(result)
 
-        document = self.get_document(result)
+        document = self.get_document(result, parser, encoding=pageCls.ENCODING)
         self.page = pageCls(self, document, result.geturl(), groups=page_groups, group_dict=page_group_dict, logger=self.logger)
 
         if not no_login and self.password is not None and not self.is_logged():
@@ -636,3 +719,70 @@ class BaseBrowser(StandardBrowser):
 
         if self._cookie:
             self._cookie.save()
+
+
+def mywrap_socket(sock, *args, **kwargs):
+    kwargs['do_handshake_on_connect'] = False
+    sock = ssl.wrap_socketold(sock, *args, **kwargs)
+    sock.settimeout(StandardBrowser.DEFAULT_TIMEOUT)
+    try:
+        sock.getpeername()
+    except:
+        sock.do_handshake_on_connect = True
+    else:
+        sock.do_handshake()
+    return sock
+
+
+ssl.wrap_socketold = ssl.wrap_socket
+ssl.wrap_socket = mywrap_socket
+
+
+class DNSTimeoutException(Exception):
+    pass
+
+cacheDNS = {}
+
+def my_getaddrinfo(*args):
+    try:
+        res, timeout = cacheDNS[args]
+        # Do not cache result more than one hour
+        # it prevents to cache results in long time application
+        # like monboob
+        if time.time() - timeout > 3600:
+            raise DNSTimeoutException()
+        return res
+    except (KeyError, DNSTimeoutException):
+        res = socket.getaddrinfoold(*args)
+        cacheDNS[args] = res, time.time()
+        return res
+
+socket.getaddrinfoold = socket.getaddrinfo
+socket.getaddrinfo = my_getaddrinfo
+
+
+class HTTPSConnection2(httplib.HTTPSConnection):
+    _HOSTS = {}
+    _PROTOCOLS = [ssl.PROTOCOL_TLSv1, ssl.PROTOCOL_SSLv3]
+
+    def _create_connection(self):
+        sock = socket.create_connection((self.host, self.port), self.timeout)
+        if self._tunnel_host:
+            self._tunnel()
+        return sock
+
+    def _get_protocols(self):
+        return self._HOSTS.get('%s:%s' % (self.host, self.port), self._PROTOCOLS)
+
+    def connect(self):
+        for proto in self._get_protocols():
+            sock = self._create_connection()
+            try:
+                self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file, ssl_version=proto)
+                self._HOSTS['%s:%s' % (self.host, self.port)] = [proto]
+                return
+            except ssl.SSLError as e:
+                sock.close()
+        raise e
+
+httplib.HTTPSConnection = HTTPSConnection2

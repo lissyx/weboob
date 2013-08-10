@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from threading import Timer, Event, RLock, _Timer
 from weboob.tools.log import getLogger
@@ -44,6 +44,7 @@ class IScheduler(object):
     def want_stop(self):
         raise NotImplementedError()
 
+
 class RepeatedTimer(_Timer):
     def run(self):
         while not self.finished.isSet():
@@ -54,6 +55,7 @@ class RepeatedTimer(_Timer):
                 print get_backtrace()
             self.finished.wait(self.interval)
         self.finished.set()
+
 
 class Scheduler(IScheduler):
     def __init__(self):
@@ -116,7 +118,7 @@ class Scheduler(IScheduler):
 
     def run(self):
         try:
-            while 1:
+            while True:
                 self.stop_event.wait(0.1)
         except KeyboardInterrupt:
             self._wait_to_stop()

@@ -21,10 +21,19 @@
 from weboob.capabilities.video import BaseVideo
 
 
-__all__ = ['ArteVideo']
+__all__ = ['ArteVideo','ArteLiveVideo']
 
 
 class ArteVideo(BaseVideo):
     @classmethod
     def id2url(cls, _id):
         return 'http://videos.arte.tv/fr/videos/%s.html' % _id
+
+
+class ArteLiveVideo(BaseVideo):
+    def __init__(self, _id, *args, **kwargs):
+        BaseVideo.__init__(self, 'live.%s' % _id, *args, **kwargs)
+
+    @classmethod
+    def id2url(cls, _id):
+        return 'http://arte.vo.llnwd.net/o21/liveweb/events/event-%s.xml' % _id

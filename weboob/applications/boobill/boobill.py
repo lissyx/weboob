@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright(C) 2012 Florent Fourcot
+# Copyright(C) 2012-2013 Florent Fourcot
 #
 # This file is part of weboob.
 #
@@ -22,7 +22,7 @@ import sys
 from decimal import Decimal
 
 from weboob.capabilities.bill import ICapBill, Detail, Subscription
-from weboob.tools.application.repl import ReplApplication
+from weboob.tools.application.repl import ReplApplication, defaultcount
 from weboob.tools.application.formatters.iformatter import PrettyFormatter
 
 
@@ -33,14 +33,17 @@ class SubscriptionsFormatter(PrettyFormatter):
     MANDATORY_FIELDS = ('id', 'label')
 
     def get_title(self, obj):
+        if obj.renewdate:
+            return u"%s - %s" % (obj.label, obj.renewdate.strftime('%d/%m/%y'))
         return obj.label
 
 
 class Boobill(ReplApplication):
     APPNAME = 'boobill'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2012 Florent Fourcot'
     DESCRIPTION = 'Console application allowing to get and download bills.'
+    SHORT_DESCRIPTION = "get and download bills"
     CAPS = ICapBill
     COLLECTION_OBJECTS = (Subscription, )
     EXTRA_FORMATTERS = {'subscriptions':   SubscriptionsFormatter,
@@ -70,7 +73,6 @@ class Boobill(ReplApplication):
             self.start_format()
             for backend, result in self.do(method, id, backends=names):
                 self.format(result)
-            self.flush()
 
     def do_subscriptions(self, line):
         """
@@ -81,7 +83,6 @@ class Boobill(ReplApplication):
         self.start_format()
         for subscription in self.get_object_list('iter_subscription'):
             self.format(subscription)
-        self.flush()
 
     def do_details(self, id):
         """
@@ -114,8 +115,18 @@ class Boobill(ReplApplication):
                 mysum.price = detail.price + mysum.price
 
             self.format(mysum)
-            self.flush()
 
+    def do_balance(self, id):
+        """
+        balance [Id]
+
+        Get balance of subscriptions.
+        If no ID given, display balance of all backends
+        """
+
+        self.exec_method(id, 'get_balance')
+
+    @defaultcount(10)
     def do_history(self, id):
         """
         history [Id]
@@ -123,8 +134,9 @@ class Boobill(ReplApplication):
         Get the history of subscriptions.
         If no ID given, display histories of all backends
         """
-        self.exec_method(id, 'iter_history')
+        self.exec_method(id, 'iter_bills_history')
 
+    @defaultcount(10)
     def do_bills(self, id):
         """
         bills [Id]
@@ -132,23 +144,41 @@ class Boobill(ReplApplication):
         Get the list of bills documents for subscriptions.
         If no ID given, display bills of all backends
         """
-        self.exec_method(id, 'iter_bills') 
+        self.exec_method(id, 'iter_bills')
 
     def do_download(self, line):
         """
+        download [Id | all] [FILENAME]
+
         download Id [FILENAME]
 
         download the bill
         id is the identifier of the bill (hint: try bills command)
         FILENAME is where to write the file. If FILENAME is '-',
         the file is written to stdout.
+
+        download all [Id]
+
+        You can use special word "all" and download all bills of
+        subscription identified by Id.
+        If Id not given, download bills of all subscriptions.
         """
         id, dest = self.parse_command_args(line, 2, 1)
         id, backend_name = self.parse_id(id)
         if not id:
             print >>sys.stderr, 'Error: please give a bill ID (hint: use bills command)'
             return 2
+
         names = (backend_name,) if backend_name is not None else None
+        # Special keywords, download all bills of all subscriptions
+        if id == "all":
+            if dest is None:
+                for backend, subscription in self.do('iter_subscription', backends=names):
+                    self.download_all(subscription.id, names)
+                return
+            else:
+                self.download_all(dest, names)
+                return
 
         if dest is None:
             for backend, bill in self.do('get_bill', id, backends=names):
@@ -162,7 +192,25 @@ class Boobill(ReplApplication):
                     try:
                         with open(dest, 'w') as f:
                             f.write(buf)
-                    except IOError, e:
+                    except IOError as e:
                         print >>sys.stderr, 'Unable to write bill in "%s": %s' % (dest, e)
                         return 1
                 return
+
+    def download_all(self, id, names):
+        id, backend_name = self.parse_id(id)
+        for backend, bill in self.do('iter_bills', id, backends=names):
+            dest = bill.id + "." + bill.format
+            for backend2, buf in self.do('download_bill', bill.id, backends=names):
+                if buf:
+                    if dest == "-":
+                        print buf
+                    else:
+                        try:
+                            with open(dest, 'w') as f:
+                                f.write(buf)
+                        except IOError as e:
+                            print >>sys.stderr, 'Unable to write bill in "%s": %s' % (dest, e)
+                            return 1
+
+        return

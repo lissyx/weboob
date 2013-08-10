@@ -29,19 +29,23 @@ class HomePage(BasePage):
         pass
 
     def get_list(self):
-        l = []
-        divabo = self.document.xpath('//div[@class="idAbonne pointer"]')[0]
-        owner = divabo.xpath('p')[0].text.replace(' - ', '')
-        phone = divabo.xpath('p/span')[0].text
-        self.browser.logger.debug('Found ' + owner + ' has subscriber')
-        self.browser.logger.debug('Found ' + phone + ' has phone number')
-        phoneplan = self.document.xpath('//div[@class="forfaitChoisi"]')[0].text.lstrip().rstrip()
-        self.browser.logger.debug('Found ' + phoneplan + ' has subscription type')
+        for divglobal in self.document.xpath('//div[@class="abonne"]'):
+            for link in divglobal.xpath('.//div[@class="acceuil_btn"]/a'):
+                login = link.attrib['href'].split('=').pop()
+                if login.isdigit():
+                    break
+            divabo = divglobal.xpath('div[@class="idAbonne pointer"]')[0]
+            owner = unicode(divabo.xpath('p')[0].text.replace(' - ', ''))
+            phone = unicode(divabo.xpath('p/span')[0].text)
+            self.browser.logger.debug('Found ' + login + ' as subscription identifier')
+            self.browser.logger.debug('Found ' + owner + ' as subscriber')
+            self.browser.logger.debug('Found ' + phone + ' as phone number')
+            phoneplan = unicode(self.document.xpath('//div[@class="forfaitChoisi"]')[0].text.lstrip().rstrip())
+            self.browser.logger.debug('Found ' + phoneplan + ' as subscription type')
 
-        subscription = Subscription(phone)
-        subscription.label = phone + ' - ' + phoneplan
-        subscription.subscriber = owner
+            subscription = Subscription(phone)
+            subscription.label = phone + ' - ' + phoneplan
+            subscription.subscriber = owner
+            subscription._login = login
 
-        l.append(subscription)
-
-        return l
+            yield subscription

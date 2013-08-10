@@ -19,12 +19,13 @@
 
 
 from datetime import date, datetime
+from binascii import crc32
 
-from .base import CapBaseObject, Field, StringField, DateField, DecimalField, IntField, UserError
+from .base import CapBaseObject, Field, StringField, DateField, DecimalField, IntField, UserError, Currency
 from .collection import ICapCollection
 
 
-__all__ = ['AccountNotFound', 'TransferError', 'Recipient', 'Account', 'Transaction', 'Transfer', 'ICapBank']
+__all__ = ['AccountNotFound', 'TransferError', 'Recipient', 'Account', 'Transaction', 'Investment', 'Transfer', 'ICapBank']
 
 
 class AccountNotFound(UserError):
@@ -35,20 +36,28 @@ class AccountNotFound(UserError):
     def __init__(self, msg='Account not found'):
         UserError.__init__(self, msg)
 
+
 class TransferError(UserError):
     """
     A transfer has failed.
     """
 
-class Recipient(CapBaseObject):
+
+class Recipient(CapBaseObject, Currency):
     """
     Recipient of a transfer.
     """
 
     label = StringField('Name')
+    currency =  IntField('Currency', default=Currency.CUR_UNKNOWN)
 
     def __init__(self):
         CapBaseObject.__init__(self, 0)
+
+    @property
+    def currency_text(self):
+        return Currency.currency2txt(self.currency)
+
 
 class Account(Recipient):
     """
@@ -88,17 +97,48 @@ class Transaction(CapBaseObject):
     TYPE_LOAN_PAYMENT = 8
     TYPE_BANK         = 9
 
-    date =      DateField('Debit date')
-    rdate =     DateField('Real date, when the payment has been made')
+    date =      DateField('Debit date on the bank statement')
+    rdate =     DateField('Real date, when the payment has been made; usually extracted from the label or from credit card info')
+    vdate =     DateField('Value date, or accounting date; usually for professional accounts')
     type =      IntField('Type of transaction, use TYPE_* constants', default=TYPE_UNKNOWN)
     raw =       StringField('Raw label of the transaction')
-    category =  StringField('Category of transaction')
+    category =  StringField('Category of the transaction')
     label =     StringField('Pretty label')
-    amount =    DecimalField('Amount of transaction')
+    amount =    DecimalField('Amount of the transaction')
 
     def __repr__(self):
-        return "<Transaction date='%s' label='%s' amount=%s>" % (self.date,
-            self.label, self.amount)
+        return "<Transaction date=%r label=%r amount=%r>" % (self.date, self.label, self.amount)
+
+    def unique_id(self, seen=None, account_id=None):
+        crc = crc32(str(self.date))
+        crc = crc32(str(self.amount), crc)
+        crc = crc32(self.label.encode("utf-8"), crc)
+
+        if account_id is not None:
+            crc = crc32(str(account_id), crc)
+
+        if seen is not None:
+            while crc in seen:
+                crc = crc32("*", crc)
+
+            seen.add(crc)
+
+        return "%08x" % (crc & 0xffffffff)
+
+
+class Investment(CapBaseObject):
+    """
+    Investment in a financial market.
+    """
+
+    label =     StringField('Label of stocks')
+    code =      StringField('Short code identifier of the stock')
+    quantity =  IntField('Quantity of stocks')
+    unitprice = DecimalField('Buy price of one stock')
+    unitvalue = DecimalField('Current value of one stock')
+    valuation = DecimalField('Total current valuation of the Investment')
+    diff =      DecimalField('Difference between the buy cost and the current valuation')
+
 
 class Transfer(CapBaseObject):
     """
@@ -109,6 +149,8 @@ class Transfer(CapBaseObject):
     date =      Field('Date of transfer', basestring, date, datetime)
     origin =    Field('Origin of transfer', int, long, basestring)
     recipient = Field('Recipient', int, long, basestring)
+    reason =    StringField('Reason')
+
 
 class ICapBank(ICapCollection):
     """
@@ -198,5 +240,16 @@ class ICapBank(ICapCollection):
         :type reason: :class:`unicode`
         :rtype: :class:`Transfer`
         :raises: :class:`AccountNotFound`, :class:`TransferError`
+        """
+        raise NotImplementedError()
+
+    def iter_investment(self, account):
+        """
+        Iter investment of a market account
+
+        :param account: account to get investments
+        :type account: :class:`Account`
+        :rtype: iter[:class:`Investment`]
+        :raises: :class:`AccountNotFound`
         """
         raise NotImplementedError()

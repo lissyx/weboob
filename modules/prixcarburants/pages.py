@@ -44,6 +44,7 @@ class IndexPage(BasePage):
 
             yield product
 
+
 class ComparisonResultsPage(BasePage):
     def get_product_name(self):
         try:
@@ -51,7 +52,7 @@ class ComparisonResultsPage(BasePage):
         except BrokenPageError:
             return NotAvailable
         else:
-            m = re.match('Carburant : (\w+) | .*', div.text)
+            m = re.match('Carburant : ([\w\-]+) | .*', div.text)
             return m.group(1)
 
     def iter_results(self, product=None):
@@ -74,6 +75,7 @@ class ComparisonResultsPage(BasePage):
                 price.shop = shop
                 price.set_empty_fields(NotAvailable)
                 yield price
+
 
 class ShopInfoPage(BasePage):
     def get_info(self):

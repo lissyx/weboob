@@ -33,6 +33,7 @@ class Content(CapBaseObject):
     content =       StringField('Body')
     revision =      StringField('ID of revision')
 
+
 class Revision(CapBaseObject):
     """
     Revision of a change on a content.
@@ -41,6 +42,7 @@ class Revision(CapBaseObject):
     comment =       StringField('Comment log about revision')
     timestamp =     DateField('Date of revision')
     minor =         Field('Is this change minor?', bool)
+
 
 class ICapContent(IBaseCap):
     def get_content(self, id, revision=None):
@@ -55,14 +57,12 @@ class ICapContent(IBaseCap):
         """
         raise NotImplementedError()
 
-    def iter_revisions(self, id, max_results=10):
+    def iter_revisions(self, id):
         """
         Iter revisions of a content.
 
         :param id: id of content
         :type id: str
-        :param max_results: maximum results
-        :type max_results: int
         :rtype: iter[:class:`Revision`]
         """
         raise NotImplementedError()

@@ -19,7 +19,7 @@
 
 from weboob.capabilities.bill import Subscription
 from weboob.tools.browser import BasePage
-
+from datetime import date
 
 __all__ = ['HomePage']
 
@@ -36,15 +36,18 @@ class HomePage(BasePage):
         credit = divabo.xpath('dl/dd')[1].text
         expiredate = divabo.xpath('dl/dd')[2].text
         phoneplan = divabo.xpath('dl/dd')[3].text
-        self.browser.logger.debug('Found ' + owner + ' has subscriber')
-        self.browser.logger.debug('Found ' + phone + ' has phone number')
-        self.browser.logger.debug('Found ' + credit + ' has available credit')
-        self.browser.logger.debug('Found ' + expiredate + 'has expire date ')
-        self.browser.logger.debug('Found ' + phoneplan + ' has subscription type')
+        self.browser.logger.debug('Found ' + owner + ' as subscriber')
+        self.browser.logger.debug('Found ' + phone + ' as phone number')
+        self.browser.logger.debug('Found ' + credit + ' as available credit')
+        self.browser.logger.debug('Found ' + expiredate + ' as expire date ')
+        self.browser.logger.debug('Found %s as subscription type', phoneplan)
 
         subscription = Subscription(phone)
-        subscription.label = unicode(phone + u' - ' + credit + u' - ' + expiredate + u' - ' + phoneplan)
-        subscription.subscriber = owner
+        subscription.label = unicode(u'%s - %s - %s - %s' %
+                (phone, credit, phoneplan, expiredate))
+        subscription.subscriber = unicode(owner)
+        expiredate = date(*reversed([int(x) for x in expiredate.split(".")]))
+        subscription.validity = expiredate
 
         l.append(subscription)
 

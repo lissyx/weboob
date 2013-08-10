@@ -18,17 +18,20 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
+from base64 import b64encode
+from hashlib import sha256
+from datetime import datetime
 import math
 import re
-import datetime
-import random
 import urllib
+import urllib2
 
-from weboob.tools.browser import BaseBrowser, BrowserIncorrectPassword, BrowserUnavailable
+from weboob.tools.browser import BaseBrowser, BrowserIncorrectPassword, BrowserHTTPNotFound, BrowserUnavailable
 from weboob.tools.json import json
+from weboob.tools.date import local2utc
+from weboob.tools.misc import to_unicode
 
 from weboob.capabilities.base import UserError
-from weboob.capabilities.chat import ChatException, ChatMessage
 from weboob.capabilities.messages import CantSendMessage
 
 
@@ -62,19 +65,87 @@ class AuMException(UserError):
         Exception.__init__(self, self.ERRORS.get(code, code))
         self.code = code
 
+
+class WebsiteBrowser(BaseBrowser):
+    def login(self):
+        data = {'username': self.username,
+                'password': self.password,
+                'remember': 'on',
+               }
+        self.readurl('http://www.adopteunmec.com/auth/login', urllib.urlencode(data))
+
+    def get_profile(self, id):
+        profile = {}
+        r = None
+        try:
+            r = self.openurl('http://www.adopteunmec.com/profile/%s' % id)
+        except BrowserUnavailable:
+            pass
+
+        if r is None or not re.match('http://www.adopteunmec.com/profile/\d+', r.geturl()):
+            self.login()
+            try:
+                r = self.openurl('http://www.adopteunmec.com/profile/%s' % id)
+            except BrowserUnavailable:
+                r = None
+
+        if r is None:
+            return {}
+
+        doc = self.get_document(r)
+        profile['popu'] = {}
+        for tr in doc.xpath('//div[@id="popularity"]//tr'):
+            cols = tr.findall('td')
+            if cols[0].text is None:
+                continue
+            key = self.parser.tocleanstring(tr.find('th')).strip().lower()
+            value = int(re.sub(u'[ \xa0x]+', u'', cols[0].text).strip())
+            profile['popu'][key] = value
+
+        for script in doc.xpath('//script'):
+            text = script.text
+            if text is None:
+                continue
+            m = re.search('memberLat: ([\-\d\.]+),', text, re.IGNORECASE)
+            if m:
+                profile['lat'] = float(m.group(1))
+            m = re.search('memberLng: ([\-\d\.]+),', text, re.IGNORECASE)
+            if m:
+                profile['lng'] = float(m.group(1))
+
+        return profile
+
 class AuMBrowser(BaseBrowser):
-    DOMAIN = 'api.adopteunmec.com'
+    DOMAIN = 'www.adopteunmec.com'
     APIKEY = 'fb0123456789abcd'
+    APITOKEN = 'DCh7Se53v8ejS8466dQe63'
+    APIVERSION = '2.2.5'
+    USER_AGENT = 'Mozilla/5.0 (Linux; U; Android4.1.1; fr_FR; GT-N7100; Build/JRO03C) com.adopteunmec.androidfr/17'
+    GIRL_PROXY = None
 
     consts = None
-    search_query = None
     my_sex = 0
     my_id = 0
     my_name = u''
     my_coords = (0,0)
 
+    def __init__(self, username, password, search_query, *args, **kwargs):
+        kwargs['get_home'] = False
+        BaseBrowser.__init__(self, username, password, *args, **kwargs)
+
+        # now we do authentication ourselves
+        #self.add_password('http://www.adopteunmec.com/api/', self.username, self.password)
+        self.login()
+
+        self.website = WebsiteBrowser(self.username, self.password, *args, **kwargs)
+        self.website.login()
+
+        self.home()
+
+        self.search_query = search_query
+
     def id2url(self, id):
-        return 'http://www.adopteunmec.com/index.php/profile/%s' % id
+        return u'http://www.adopteunmec.com/profile/%s' % id
 
     def url2id(func):
         def inner(self, id, *args, **kwargs):
@@ -82,13 +153,13 @@ class AuMBrowser(BaseBrowser):
             if m:
                 id = int(m.group(1))
             else:
-                m = re.match('^http://.*adopteunmec.com/index.php/profile/(\d+).*', str(id))
+                m = re.match('^http://.*adopteunmec.com/(index.php/)?profile/(\d+).*', str(id))
                 if m:
-                    id = int(m.group(1))
+                    id = int(m.group(2))
             return func(self, id, *args, **kwargs)
         return inner
 
-    def api_request(self, command, action, parameter='', data=None, nologin=False):
+    def api0_request(self, command, action, parameter='', data=None, nologin=False):
         if data is None:
             # Always do POST requests.
             data = ''
@@ -97,11 +168,13 @@ class AuMBrowser(BaseBrowser):
         elif isinstance(data, unicode):
             data = data.encode('utf-8')
 
-        url = self.buildurl(self.absurl('/api.php'), S=self.APIKEY,
+        url = self.buildurl('http://api.adopteunmec.com/api.php',
+                                                     S=self.APIKEY,
                                                      C=command,
                                                      A=action,
                                                      P=parameter,
                                                      O='json')
+
         buf = self.openurl(url, data).read()
 
         try:
@@ -109,293 +182,223 @@ class AuMBrowser(BaseBrowser):
         except ValueError:
             raise ValueError(buf)
 
-        #pprint(r)
-
         if 'errors' in r and r['errors'] != '0' and len(r['errors']) > 0:
             code = r['errors'][0]
             if code in (u'0.0.2', u'1.1.1', u'1.1.2'):
                 if not nologin:
                     self.login()
-                    return self.api_request(command, action, parameter, data, nologin=True)
+                    return self.api0_request(command, action, parameter, data, nologin=True)
                 else:
                     raise BrowserIncorrectPassword(AuMException.ERRORS[code])
             else:
                 raise AuMException(code)
+
         return r
 
     def login(self):
-        r = self.api_request('me', 'login', data={'login': self.username,
-                                                  'pass':  self.password,
-                                                 }, nologin=True)
-        self.my_sex = r['result']['me']['sex']
-        self.my_id = int(r['result']['me']['id'])
-        self.my_name = r['result']['me']['pseudo']
-        self.my_coords = (float(r['result']['me']['lat']), float(r['result']['me']['lng']))
+        self.api_request('applications/android')
+        # XXX old API is disabled
+        #r = self.api0_request('me', 'login', data={'login': self.username,
+        #                                           'pass':  self.password,
+        #                                          }, nologin=True)
+        #self.my_coords = (float(r['result']['me']['lat']), float(r['result']['me']['lng']))
+        #if not self.search_query:
+        #    self.search_query = 'region=%s' % r['result']['me']['region']
+
+    def api_request(self, command, **kwargs):
+        if 'data' in kwargs:
+            data = to_unicode(kwargs.pop('data')).encode('utf-8', 'replace')
+        else:
+            data = None
+
+        headers = {}
+        if not command.startswith('applications'):
+            today = local2utc(datetime.now()).strftime('%Y-%m-%d')
+            token = sha256(self.username + self.APITOKEN + today).hexdigest()
+
+            headers['Authorization'] = 'Basic %s' % (b64encode('%s:%s' % (self.username, self.password)))
+            headers['X-Platform'] = 'android'
+            headers['X-Client-Version'] = self.APIVERSION
+            headers['X-AUM-Token'] = token
+
+        url = self.buildurl(self.absurl('/api/%s' % command), **kwargs)
+        if isinstance(url, unicode):
+            url = url.encode('utf-8')
+        req = self.request_class(url, data, headers)
+        buf = self.openurl(req).read()
+
+        try:
+            r = json.loads(buf)
+        except ValueError:
+            raise ValueError(buf)
+
         return r
 
-    #def register(self, password, sex, birthday_d, birthday_m, birthday_y, zipcode, country, godfather=None):
-    #    if not self.is_on_page(RegisterPage):
-    #        self.location('http://www.adopteunmec.com/register2.php')
-    #    self.page.register(password, sex, birthday_d, birthday_m, birthday_y, zipcode, country)
-    #    if godfather:
-    #        if not self.is_on_page(AccountPage):
-    #            self.location('http://www.adopteunmec.com/account.php')
-    #        self.page.set_godfather(godfather)
+    def get_exception(self, e):
+        if isinstance(e, urllib2.HTTPError) and hasattr(e, 'getcode'):
+            if e.getcode() in (410,):
+                return BrowserHTTPNotFound
 
-    #@pageaccess
-    #def add_photo(self, name, f):
-    #    if not self.is_on_page(EditPhotoPage):
-    #        self.location('/edit.php?type=1')
-    #    return self.page.add_photo(name, f)
+        return BaseBrowser.get_exception(self, e)
 
-    #@pageaccess
-    #def set_nickname(self, nickname):
-    #    if not self.is_on_page(EditAnnouncePage):
-    #        self.location('/edit.php?type=2')
-    #    return self.page.set_nickname(nickname)
+    def home(self):
+        r = self.api_request('home/')
+        self.my_sex = r['user']['sex']
+        self.my_id = int(r['user']['id'])
+        self.my_name = r['user']['pseudo']
 
-    #@pageaccess
-    #def set_announce(self, title=None, description=None, lookingfor=None):
-    #    if not self.is_on_page(EditAnnouncePage):
-    #        self.location('/edit.php?type=2')
-    #    return self.page.set_announce(title, description, lookingfor)
+        if self.my_coords == (0,0):
+            profile = self.get_full_profile(self.my_id)
+            if 'lat' in profile and 'lng' in profile:
+                self.my_coords = [profile['lat'], profile['lng']]
 
-    #@pageaccess
-    #def set_description(self, **args):
-    #    if not self.is_on_page(EditDescriptionPage):
-    #        self.location('/edit.php?type=3')
-    #    return self.page.set_description(**args)
-
-    def check_login(func):
-        def inner(self, *args, **kwargs):
-            if self.my_id == 0:
-                self.login()
-            return func(self, *args, **kwargs)
-        return inner
+        return r
 
     def get_consts(self):
         if self.consts is not None:
             return self.consts
 
-        self.consts = []
-        for i in xrange(2):
-            r = self.api_request('me', 'all_values', data={'sex': i})
-            self.consts.append(r['result']['values'])
+        self.consts = [{}, {}]
+        for key, sexes in self.api_request('values').iteritems():
+            for sex, values in sexes.iteritems():
+                if sex in ('boy', 'both'):
+                    self.consts[0][key] = values
+                if sex in ('girl', 'both'):
+                    self.consts[1][key] = values
 
         return self.consts
 
-    @check_login
     def score(self):
-        r = self.api_request('member', 'view', data={'id': self.my_id})
-        return int(r['result']['member']['popu']['popu'])
+        r = self.home()
+        return int(r['user']['points'])
 
-    @check_login
     def get_my_name(self):
         return self.my_name
 
-    @check_login
     def get_my_id(self):
         return self.my_id
 
-    @check_login
     def nb_new_mails(self):
-        r = self.api_request('me', '[default]')
-        return r['result']['news']['newMails']
+        r = self.home()
+        return r['counters']['new_mails']
 
-    @check_login
     def nb_new_baskets(self):
-        r = self.api_request('me', '[default]')
-        return r['result']['news']['newBaskets']
+        r = self.home()
+        return r['counters']['new_baskets']
 
-    @check_login
     def nb_new_visites(self):
-        r = self.api_request('me', '[default]')
-        return r['result']['news']['newVisits']
+        r = self.home()
+        return r['counters']['new_visits']
 
-    @check_login
     def nb_available_charms(self):
-        r = self.login()
-        return r['result']['flashs']
+        r = self.home()
+        return r['subscription']['flashes_stock']
 
-    @check_login
-    def nb_godchilds(self):
-        r = self.api_request('member', 'view', data={'id': self.my_id})
-        return int(r['result']['member']['popu']['invits'])
-
-    @check_login
     def get_baskets(self):
-        r = self.api_request('me', 'basket')
-        return r['result']['basket']
+        r = self.api_request('basket', count=30, offset=0)
+        return r['results']
 
-    @check_login
     def get_flashs(self):
-        r = self.api_request('me', 'flashs')
-        return r['result']['all']
+        r = self.api_request('charms/', count=30, offset=0)
+        return r['results']
 
-    @check_login
     def get_visits(self):
-        r = self.api_request('me', 'visits')
-        return r['result']['news'] + r['result']['olds']
+        r = self.api_request('visits', count=30, offset=0)
+        return r['results']
 
-    @check_login
     def get_threads_list(self, count=30):
-        r = self.api_request('message', '[default]', '%d,0' % count)
-        return r['result']['threads']
+        r = self.api_request('threads', count=count, offset=0)
+        return r['results']
 
-    @check_login
     @url2id
     def get_thread_mails(self, id, count=30):
-        r = self.api_request('message', 'thread', data={'memberId': id, 'count': count})
-        return r['result']['thread']
+        r = self.api_request('threads/%s' % id, count=count, offset=0)
+        return r
 
-    @check_login
     @url2id
     def post_mail(self, id, content):
-        # It seems it is not needed anymore.
-        #new_content = u''
-        #for c in content:
-        #    try:
-        #        new_content += '&%s;' % codepoint2name[ord(c)]
-        #    except KeyError:
-        #        new_content += c
-
-        content = content.replace('\n', '\r\n').encode('utf-8', 'replace')
+        content = content.replace('\n', '\r\n')
 
         try:
-            self.api_request('message', 'new', data={'memberId': id, 'message': content})
-        except AuMException, e:
-            raise CantSendMessage(unicode(e))
+            self.api_request('threads/%s' % id, data=content)
+        except BrowserHTTPNotFound:
+            raise CantSendMessage('Unable to send message.')
 
-    @check_login
     @url2id
     def delete_thread(self, id):
         r = self.api_request('message', 'delete', data={'id_user': id})
         self.logger.debug('Thread deleted: %r' % r)
 
-    @check_login
     @url2id
     def send_charm(self, id):
         try:
-            self.api_request('member', 'addBasket', data={'id': id})
-        except AuMException:
+            self.api_request('users/%s/charms' % id, data='')
+        except BrowserHTTPNotFound:
             return False
         else:
             return True
 
-    @check_login
     @url2id
     def add_basket(self, id):
         try:
-            self.api_request('member', 'addBasket', data={'id': id})
-        except AuMException:
+            self.api_request('basket/%s' % id, data='')
+        except BrowserHTTPNotFound:
             return False
         else:
             return True
 
-    @url2id
-    def deblock(self, id):
-        self.readurl('http://www.adopteunmec.com/fajax_postMessage.php?action=deblock&to=%s' % id)
-        return True
-
-    @url2id
-    def report_fake(self, id):
-        return self.readurl('http://www.adopteunmec.com/fake.php', 'id=%s' % id)
-
-    @url2id
-    def rate(self, id, what, rating):
-        result = self.openurl('http://www.adopteunmec.com/fajax_vote.php', 'member=%s&what=%s&rating=%s' % (id, what, rating)).read()
-        return float(result)
-
     def search_profiles(self, **kwargs):
-        if self.search_query is None:
-            r = self.api_request('searchs', '[default]')
-            self.search_query = r['result']['search']['query']
+        if not self.search_query:
+            # retrieve query
+            self.login()
 
-        params = {}
-        for key, value in json.loads(self.search_query).iteritems():
-            if isinstance(value, dict):
-                for k, v in value.iteritems():
-                    params['%s%s' % (key, k.capitalize())] = v
-            else:
-                params[key] = value or ''
-        r = self.api_request('searchs', 'advanced', '60,0', params)
-        ids = [s['id'] for s in r['result']['search']]
+        r = self.api_request('users?count=100&offset=0&%s' % self.search_query)
+        ids = [s['id'] for s in r['results']]
         return set(ids)
 
     @url2id
-    def get_profile(self, id, with_pics=True):
-        r = self.api_request('member', 'view', data={'id': id})
-        if not 'result' in r:
-            print r
-        profile = r['result']['member']
+    def get_full_profile(self, id):
+        if self.GIRL_PROXY is not None:
+            res = self.openurl(self.GIRL_PROXY % id)
+            profile = json.load(res)
+            if 'lat' in profile and 'lng' in profile:
+                profile['dist'] = self.get_dist(profile['lat'], profile['lng'])
+        else:
+            profile = self.get_profile(id)
 
+        return profile
+
+    def get_dist(self, lat, lng):
+        coords = (float(lat), float(lng))
+
+        R = 6371
+        lat1 = math.radians(self.my_coords[0])
+        lat2 = math.radians(coords[0])
+        lon1 = math.radians(self.my_coords[1])
+        lon2 = math.radians(coords[1])
+        dLat = lat2 - lat1
+        dLong = lon2 - lon1
+        a= pow(math.sin(dLat/2), 2) + math.cos(lat1) * math.cos(lat2) * pow(math.sin(dLong/2), 2)
+        c= 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+        return R * c
+
+    @url2id
+    def get_profile(self, id):
+        # XXX OLD API IS DISABLED (fucking faggots)
+        #r = self.api0_request('member', 'view', data={'id': id})
+        #if not 'result' in r:
+        #    print r
+        #profile = r['result']['member']
+
+        profile = {}
+
+        profile.update(self.api_request('users/%s' % id))
+        profile.update(self.website.get_profile(id))
 
         # Calculate distance in km.
         profile['dist'] = 0.0
         if 'lat' in profile and 'lng' in profile:
-            coords = (float(profile['lat']), float(profile['lng']))
-
-            R = 6371
-            lat1 = math.radians(self.my_coords[0])
-            lat2 = math.radians(coords[0])
-            lon1 = math.radians(self.my_coords[1])
-            lon2 = math.radians(coords[1])
-            dLat = lat2 - lat1
-            dLong = lon2 - lon1
-            a= pow(math.sin(dLat/2), 2) + math.cos(lat1) * math.cos(lat2) * pow(math.sin(dLong/2), 2)
-            c= 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-            profile['dist'] = R * c
-
-        if with_pics:
-            r = self.api_request('member', 'pictures', data={'id': id})
-            profile['pictures'] = []
-            for pic in r['result']['pictures']:
-                d = {'hidden': False}
-                d.update(pic)
-                profile['pictures'].append(d)
+            profile['dist'] = self.get_dist(profile['lat'], profile['lng'])
 
         return profile
-
-    def _get_chat_infos(self):
-        try:
-            data = json.load(self.openurl('http://www.adopteunmec.com/1.1_cht_get.php?anticache=%f' % random.random()))
-        except ValueError:
-            raise BrowserUnavailable()
-
-        if data['error']:
-            raise ChatException(u'Error while getting chat infos. json:\n%s' % data)
-        return data
-
-    def iter_contacts(self):
-        def iter_dedupe(contacts):
-            yielded_ids = set()
-            for contact in contacts:
-                if contact['id'] not in yielded_ids:
-                    yield contact
-                yielded_ids.add(contact['id'])
-
-        data = self._get_chat_infos()
-        return iter_dedupe(data['contacts'])
-
-    def iter_chat_messages(self, _id=None):
-        data = self._get_chat_infos()
-        if data['messages'] is not None:
-            for message in data['messages']:
-                yield ChatMessage(id_from=message['id_from'], id_to=message['id_to'], message=message['message'], date=message['date'])
-
-    def send_chat_message(self, _id, message):
-        url = 'http://www.adopteunmec.com/1.1_cht_send.php?anticache=%f' % random.random()
-        data = dict(id=_id, message=message)
-        headers = {
-                'Content-type': 'application/x-www-form-urlencoded',
-                'Accept': 'text/plain',
-                'Referer': 'http://www.adopteunmec.com/chat.php',
-                'Origin': 'http://www.adopteunmec.com',
-                }
-        request = self.request_class(url, urllib.urlencode(data), headers)
-        response = self.openurl(request).read()
-        try:
-            datetime.datetime.strptime(response,  '%Y-%m-%d %H:%M:%S')
-            return True
-        except ValueError:
-            return False

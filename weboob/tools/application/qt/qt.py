@@ -22,23 +22,26 @@ import logging
 import re
 from threading import Event
 from copy import copy
-from PyQt4.QtCore import QTimer, SIGNAL, QObject, QString, QSize, QVariant, QMutex
+from PyQt4.QtCore import QTimer, SIGNAL, QObject, QString, QSize, QVariant, QMutex, Qt
 from PyQt4.QtGui import QMainWindow, QApplication, QStyledItemDelegate, \
                         QStyleOptionViewItemV4, QTextDocument, QStyle, \
                         QAbstractTextDocumentLayout, QPalette, QMessageBox, \
-                        QSpinBox, QLineEdit, QComboBox, QCheckBox, QInputDialog, \
-                        QLineEdit
+                        QSpinBox, QLineEdit, QComboBox, QCheckBox, QInputDialog
 
-from weboob.core.ouiboube import Weboob
+from weboob.core.ouiboube import Weboob, VersionsMismatchError
 from weboob.core.scheduler import IScheduler
-from weboob.tools.browser import BrowserUnavailable, BrowserIncorrectPassword
+from weboob.core.repositories import ModuleInstallError
+from weboob.tools.config.iconfig import ConfigError
+from weboob.tools.browser import BrowserUnavailable, BrowserIncorrectPassword, BrowserForbidden
 from weboob.tools.value import ValueInt, ValueBool, ValueBackendPassword
 from weboob.tools.misc import to_unicode
 from weboob.capabilities import UserError
 
-from ..base import BaseApplication
+from ..base import BaseApplication, MoreResultsAvailable
+
 
 __all__ = ['QtApplication', 'QtMainWindow', 'QtDo', 'HTMLDelegate']
+
 
 class QtScheduler(IScheduler):
     def __init__(self, app):
@@ -81,6 +84,7 @@ class QtScheduler(IScheduler):
 
     def run(self):
         self.app.exec_()
+
 
 class QCallbacksManager(QObject):
     class Request(object):
@@ -133,6 +137,7 @@ class QCallbacksManager(QObject):
         request.event.wait()
         return request.answer
 
+
 class QtApplication(QApplication, BaseApplication):
     def __init__(self):
         QApplication.__init__(self, sys.argv)
@@ -144,9 +149,37 @@ class QtApplication(QApplication, BaseApplication):
     def create_weboob(self):
         return Weboob(scheduler=QtScheduler(self))
 
+    def load_backends(self, *args, **kwargs):
+        while True:
+            try:
+                return BaseApplication.load_backends(self, *args, **kwargs)
+            except VersionsMismatchError as e:
+                msg = 'Versions of modules mismatch with version of weboob.'
+            except ConfigError as e:
+                msg = unicode(e)
+
+            res = QMessageBox.question(None, 'Configuration error', u'%s\n\nDo you want to update repositories?' % msg, QMessageBox.Yes|QMessageBox.No)
+            if res == QMessageBox.No:
+                raise e
+
+            # Do not import it globally, it causes circular imports
+            from .backendcfg import ProgressDialog
+            pd = ProgressDialog('Update of repositories', "Cancel", 0, 100)
+            pd.setWindowModality(Qt.WindowModal)
+            try:
+                self.weboob.update(pd)
+            except ModuleInstallError as err:
+                QMessageBox.critical(None, self.tr('Update error'),
+                                     unicode(self.tr('Unable to update repositories: %s' % err)),
+                                     QMessageBox.Ok)
+            pd.setValue(100)
+            QMessageBox.information(None, self.tr('Update of repositories'),
+                                    self.tr('Repositories updated!'), QMessageBox.Ok)
+
 class QtMainWindow(QMainWindow):
     def __init__(self, parent=None):
         QMainWindow.__init__(self, parent)
+
 
 class QtDo(QObject):
     def __init__(self, weboob, cb, eb=None):
@@ -168,6 +201,10 @@ class QtDo(QObject):
         self.process.callback_thread(self.thread_cb, self.thread_eb)
 
     def default_eb(self, backend, error, backtrace):
+        if isinstance(error, MoreResultsAvailable):
+            # This is not an error, ignore.
+            return
+
         msg = unicode(error)
         if isinstance(error, BrowserIncorrectPassword):
             if not msg:
@@ -175,9 +212,12 @@ class QtDo(QObject):
         elif isinstance(error, BrowserUnavailable):
             if not msg:
                 msg = 'Website is unavailable.'
+        elif isinstance(error, BrowserForbidden):
+            if not msg:
+                msg = 'This action is forbidden.'
         elif isinstance(error, NotImplementedError):
-            msg = 'This feature is not supported by this backend.\n\n' \
-                  'To help the maintainer of this backend implement this feature, please contact: %s <%s>' % (backend.MAINTAINER, backend.EMAIL)
+            msg = u'This feature is not supported by this backend.\n\n' \
+                  u'To help the maintainer of this backend implement this feature, please contact: %s <%s>' % (backend.MAINTAINER, backend.EMAIL)
         elif isinstance(error, UserError):
             if not msg:
                 msg = type(error).__name__
@@ -211,15 +251,13 @@ class QtDo(QObject):
 
     def local_eb(self, backend, error, backtrace):
         self.eb(backend, error, backtrace)
-        self.disconnect(self, SIGNAL('cb'), self.local_cb)
-        self.disconnect(self, SIGNAL('eb'), self.local_eb)
-        self.process = None
 
     def thread_cb(self, backend, data):
         self.emit(SIGNAL('cb'), backend, data)
 
     def thread_eb(self, backend, error, backtrace):
         self.emit(SIGNAL('eb'), backend, error, backtrace)
+
 
 class HTMLDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
@@ -258,6 +296,7 @@ class HTMLDelegate(QStyledItemDelegate):
 
         return QSize(doc.idealWidth(), max(doc.size().height(), optionV4.decorationSize.height()))
 
+
 class _QtValueStr(QLineEdit):
     def __init__(self, value):
         QLineEdit.__init__(self)
@@ -275,10 +314,12 @@ class _QtValueStr(QLineEdit):
         self._value.set(unicode(self.text()))
         return self._value
 
+
 class _QtValueBackendPassword(_QtValueStr):
     def get_value(self):
         self._value._domain = None
         return _QtValueStr.get_value(self)
+
 
 class _QtValueBool(QCheckBox):
     def __init__(self, value):
@@ -295,6 +336,7 @@ class _QtValueBool(QCheckBox):
         self._value.set(self.isChecked())
         return self._value
 
+
 class _QtValueInt(QSpinBox):
     def __init__(self, value):
         QSpinBox.__init__(self)
@@ -309,6 +351,7 @@ class _QtValueInt(QSpinBox):
     def get_value(self):
         self._value.set(self.getValue())
         return self._value
+
 
 class _QtValueChoices(QComboBox):
     def __init__(self, value):
@@ -329,6 +372,7 @@ class _QtValueChoices(QComboBox):
     def get_value(self):
         self._value.set(unicode(self.itemData(self.currentIndex()).toString()))
         return self._value
+
 
 def QtValue(value):
     if isinstance(value, ValueBool):

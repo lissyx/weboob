@@ -22,20 +22,14 @@ import os
 from threading import RLock
 from copy import copy
 
-from weboob.capabilities.base import CapBaseObject, FieldNotFound, ObjectNotSupported, \
-                                     IBaseCap, NotLoaded
+from weboob.capabilities.base import CapBaseObject, FieldNotFound, \
+    IBaseCap, NotLoaded, NotAvailable
 from weboob.tools.misc import iter_fields
 from weboob.tools.log import getLogger
 from weboob.tools.value import ValuesDict
 
 
-__all__ = ['ObjectNotAvailable', 'BackendStorage', 'BackendConfig', 'BaseBackend']
-
-
-class ObjectNotAvailable(Exception):
-    """
-    Raised when an object is not available.
-    """
+__all__ = ['BackendStorage', 'BackendConfig', 'BaseBackend']
 
 
 class BackendStorage(object):
@@ -60,6 +54,8 @@ class BackendStorage(object):
 
         Example:
 
+        >>> from weboob.tools.storage import StandardStorage
+        >>> backend = BackendStorage('blah', StandardStorage('/tmp/cfg'))
         >>> backend.storage.set('config', 'nb_of_threads', 10)
         >>>
 
@@ -83,6 +79,8 @@ class BackendStorage(object):
 
         Example:
 
+        >>> from weboob.tools.storage import StandardStorage
+        >>> backend = BackendStorage('blah', StandardStorage('/tmp/cfg'))
         >>> backend.storage.get('config', 'nb_of_threads')
         10
         >>> backend.storage.get('config', 'unexistant', 'path', default='lol')
@@ -165,9 +163,10 @@ class BackendConfig(ValuesDict):
             field = copy(field)
             try:
                 field.load(cfg.instname, value, cfg.weboob.callbacks)
-            except ValueError, v:
+            except ValueError as v:
                 if not nofail:
-                    raise BaseBackend.ConfigError('Backend(%s): Configuration error for field "%s": %s' % (cfg.instname, name, v))
+                    raise BaseBackend.ConfigError(
+                        'Backend(%s): Configuration error for field "%s": %s' % (cfg.instname, name, v))
 
             cfg[name] = field
         return cfg
@@ -223,7 +222,7 @@ class BaseBackend(object):
     # Backend name.
     NAME = None
     # Name of the maintainer of this backend.
-    MAINTAINER = '<unspecified>'
+    MAINTAINER = u'<unspecified>'
     # Email address of the maintainer.
     EMAIL = '<unspecified>'
     # Version of backend (for information only).
@@ -262,7 +261,7 @@ class BaseBackend(object):
         self.lock.release()
 
     def __repr__(self):
-        return u"<Backend '%s'>" % self.name
+        return u"<Backend %r>" % self.name
 
     def __init__(self, weboob, name, config=None, storage=None, logger=None):
         self.logger = getLogger(name, parent=logger)
@@ -360,9 +359,8 @@ class BaseBackend(object):
         :param fields: what fields to fill; if None, all fields are filled
         :type fields: :class:`list`
         """
-
-        if type(obj) not in self.OBJECTS:
-            raise ObjectNotSupported('The object of type %s is not supported by the backend %s' % (type(obj).__name__, self))
+        if obj is None:
+            return obj
 
         def not_loaded(v):
             return (v is NotLoaded or isinstance(v, CapBaseObject) and not v.__iscomplete__())
@@ -402,3 +400,10 @@ class BaseBackend(object):
             if isinstance(obj, key):
                 self.logger.debug(u'Fill %r with fields: %s' % (obj, missing_fields))
                 return value(self, obj, missing_fields) or obj
+
+        # Object is not supported by backend. Do not notice it to avoid flooding user.
+        # That's not so bad.
+        for field in missing_fields:
+            setattr(obj, field, NotAvailable)
+
+        return obj

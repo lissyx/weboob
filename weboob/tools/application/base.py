@@ -26,17 +26,20 @@ import sys
 import tempfile
 import warnings
 
-from weboob.capabilities.base import NotAvailable, NotLoaded, ConversionWarning
+from weboob.capabilities.base import ConversionWarning
+from weboob.tools.browser.browser import FormFieldConversionWarning
 from weboob.core import Weboob, CallErrors
 from weboob.core.backendscfg import BackendsConfig
 from weboob.tools.config.iconfig import ConfigError
-from weboob.tools.backend import ObjectNotAvailable
 from weboob.tools.log import createColoredFormatter, getLogger
 from weboob.tools.misc import to_unicode
 
 
 __all__ = ['BaseApplication']
 
+
+class MoreResultsAvailable(Exception):
+    pass
 
 class ApplicationStorage(object):
     def __init__(self, name, storage):
@@ -64,6 +67,7 @@ class ApplicationStorage(object):
     def save(self):
         if self.storage:
             return self.storage.save('applications', self.name)
+
 
 class BaseApplication(object):
     """
@@ -145,6 +149,8 @@ class BaseApplication(object):
         if len(app_options.option_list) > 0:
             self._parser.add_option_group(app_options)
         self._parser.add_option('-b', '--backends', help='what backend(s) to enable (comma separated)')
+        self._parser.add_option('-e', '--exclude-backends', help='what backend(s) to exclude (comma separated)')
+        self._parser.add_option('-I', '--insecure', action='store_true', help='do not validate SSL')
         logging_options = OptionGroup(self._parser, 'Logging Options')
         logging_options.add_option('-d', '--debug', action='store_true', help='display debug messages')
         logging_options.add_option('-q', '--quiet', action='store_true', help='display only error messages')
@@ -162,10 +168,13 @@ class BaseApplication(object):
         """
         Create a storage object.
 
-        @param path [str]  an optional specific path.
-        @param klass [IStorage]  what klass to instance.
-        @param localonly [bool]  if True, do not set it on the Weboob object.
-        @return  a IStorage object
+        :param path: An optional specific path
+        :type path: :class:`str`
+        :param klass: What class to instance
+        :type klass: :class:`weboob.tools.storage.IStorage`
+        :param localonly: If True, do not set it on the :class:`Weboob` object.
+        :type localonly: :class:`bool`
+        :rtype: :class:`weboob.tools.storage.IStorage`
         """
         if klass is None:
             from weboob.tools.storage import StandardStorage
@@ -189,9 +198,11 @@ class BaseApplication(object):
         """
         Load a configuration file and get his object.
 
-        @param path [str]  an optional specific path.
-        @param klass [IConfig]  what klass to instance.
-        @return  a IConfig object
+        :param path: An optional specific path
+        :type path: :class:`str`
+        :param klass: What class to instance
+        :type klass: :class:`weboob.tools.config.iconfig.IConfig`
+        :rtype: :class:`weboob.tools.config.iconfig.IConfig`
         """
         if klass is None:
             from weboob.tools.config.iniconfig import INIConfig
@@ -213,10 +224,12 @@ class BaseApplication(object):
         """
         raise NotImplementedError()
 
-    def load_backends(self, caps=None, names=None, *args, **kwargs):
+    def load_backends(self, caps=None, names=None, exclude=None, *args, **kwargs):
         if names is None and self.options.backends:
             names = self.options.backends.split(',')
-        loaded = self.weboob.load_backends(caps, names, *args, **kwargs)
+        if exclude is None and self.options.exclude_backends:
+            exclude = self.options.exclude_backends.split(',')
+        loaded = self.weboob.load_backends(caps, names, exclude=exclude, *args, **kwargs)
         if not loaded:
             logging.info(u'No backend loaded')
         return loaded
@@ -232,19 +245,13 @@ class BaseApplication(object):
 
     def _do_complete_obj(self, backend, fields, obj):
         if fields is None or len(fields) > 0:
-            try:
-                backend.fillobj(obj, fields)
-            except ObjectNotAvailable, e:
-                logging.warning(u'Could not retrieve required fields (%s): %s' % (','.join(fields), e))
-                for field in fields:
-                    if getattr(obj, field) is NotLoaded:
-                        setattr(obj, field, NotAvailable)
+            backend.fillobj(obj, fields)
         return obj
 
     def _do_complete_iter(self, backend, count, fields, res):
         for i, sub in enumerate(res):
             if count and i == count:
-                break
+                raise MoreResultsAvailable()
             sub = self._do_complete_obj(backend, fields, sub)
             yield sub
 
@@ -266,18 +273,39 @@ class BaseApplication(object):
 
         This method can be overrided to support more exceptions types.
         """
+
+        # Ignore this error.
+        if isinstance(error, MoreResultsAvailable):
+            return False
+
         print >>sys.stderr, u'Error(%s): %s' % (backend.name, error)
         if logging.root.level == logging.DEBUG:
             print >>sys.stderr, backtrace
+        else:
+            return True
 
-    def bcall_errors_handler(self, errors):
+    def bcall_errors_handler(self, errors, debugmsg='Use --debug option to print backtraces', ignore=()):
         """
         Handler for the CallErrors exception.
+
+        It calls `bcall_error_handler` for each error.
+
+        :param errors: Object containing errors from backends
+        :type errors: :class:`weboob.core.bcall.CallErrors`
+        :param debugmsg: Default message asking to enable the debug mode
+        :type debugmsg: :class:`basestring`
+        :param ignore: Exceptions to ignore
+        :type ignore: tuple[:class:`Exception`]
         """
+        ask_debug_mode = False
         for backend, error, backtrace in errors.errors:
-            self.bcall_error_handler(backend, error, backtrace)
-        if logging.root.level != logging.DEBUG:
-            print >>sys.stderr, 'Use --debug option to print backtraces.'
+            if isinstance(error, ignore):
+                continue
+            elif self.bcall_error_handler(backend, error, backtrace):
+                ask_debug_mode = True
+
+        if ask_debug_mode:
+            print >>sys.stderr, debugmsg
 
     def parse_args(self, args):
         self.options, args = self._parser.parse_args(args)
@@ -304,10 +332,14 @@ class BaseApplication(object):
             level = logging.ERROR
         else:
             level = logging.WARNING
+        if self.options.insecure:
+            from weboob.tools.browser import StandardBrowser
+            StandardBrowser.INSECURE = True
 
         # this only matters to developers
         if not self.options.debug and not self.options.save_responses:
             warnings.simplefilter('ignore', category=ConversionWarning)
+            warnings.simplefilter('ignore', category=FormFieldConversionWarning)
 
         handlers = []
 
@@ -350,7 +382,7 @@ class BaseApplication(object):
     def create_logging_file_handler(self, filename):
         try:
             stream = open(filename, 'w')
-        except IOError, e:
+        except IOError as e:
             self.logger.error('Unable to create the logging file: %s' % e)
             sys.exit(1)
         else:
@@ -371,6 +403,7 @@ class BaseApplication(object):
         a call to sys.exit().
 
         For example:
+
         >>> from weboob.application.myapplication import MyApplication
         >>> MyApplication.run()
         """
@@ -382,7 +415,7 @@ class BaseApplication(object):
 
         try:
             app = klass()
-        except BackendsConfig.WrongPermissions, e:
+        except BackendsConfig.WrongPermissions as e:
             print >>sys.stderr, e
             sys.exit(1)
 
@@ -395,10 +428,10 @@ class BaseApplication(object):
                 sys.exit(0)
             except EOFError:
                 sys.exit(0)
-            except ConfigError, e:
+            except ConfigError as e:
                 print >>sys.stderr, 'Configuration error: %s' % e
                 sys.exit(1)
-            except CallErrors, e:
+            except CallErrors as e:
                 app.bcall_errors_handler(e)
                 sys.exit(1)
         finally:

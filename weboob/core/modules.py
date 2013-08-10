@@ -29,8 +29,9 @@ __all__ = ['Module', 'ModulesLoader', 'ModuleLoadError']
 
 class ModuleLoadError(Exception):
     def __init__(self, module_name, msg):
-        Exception.__init__(self, u'Unable to load module "%s": %s' % (module_name, msg))
+        Exception.__init__(self, msg)
         self.module = module_name
+
 
 class Module(object):
     def __init__(self, package):
@@ -50,7 +51,7 @@ class Module(object):
 
     @property
     def maintainer(self):
-        return '%s <%s>' % (self.klass.MAINTAINER, self.klass.EMAIL)
+        return u'%s <%s>' % (self.klass.MAINTAINER, self.klass.EMAIL)
 
     @property
     def version(self):
@@ -117,7 +118,7 @@ class ModulesLoader(object):
         for existing_module_name in self.iter_existing_module_names():
             try:
                 self.load_module(existing_module_name)
-            except ModuleLoadError, e:
+            except ModuleLoadError as e:
                 self.logger.warning(e)
 
     def load_module(self, module_name):
@@ -127,9 +128,9 @@ class ModulesLoader(object):
 
         minfo = self.repositories.get_module_info(module_name)
         if minfo is None:
-            raise ModuleLoadError(module_name, 'No such module')
+            raise ModuleLoadError(module_name, 'No such module %s' % module_name)
         if minfo.path is None:
-            raise ModuleLoadError(module_name, 'Module is not installed')
+            raise ModuleLoadError(module_name, 'Module %s is not installed' % module_name)
 
         try:
             fp, pathname, description = imp.find_module(module_name, [minfo.path])
@@ -138,7 +139,7 @@ class ModulesLoader(object):
             finally:
                 if fp:
                     fp.close()
-        except Exception, e:
+        except Exception as e:
             if logging.root.level == logging.DEBUG:
                 self.logger.exception(e)
             raise ModuleLoadError(module_name, e)

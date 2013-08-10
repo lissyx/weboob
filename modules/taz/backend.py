@@ -25,9 +25,9 @@ from .tools import rssid, url2id
 
 
 class NewspaperTazBackend(GenericNewspaperBackend, ICapMessages):
-    MAINTAINER = 'Florent Fourcot'
+    MAINTAINER = u'Florent Fourcot'
     EMAIL = 'weboob@flo.fourcot.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     STORAGE = {'seen': {}}
     NAME = 'taz'

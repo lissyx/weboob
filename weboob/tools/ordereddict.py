@@ -31,7 +31,6 @@ except ImportError:
             from UserDict import DictMixin
 
             class OrderedDict(dict, DictMixin):
-
                 def __init__(self, *args, **kwds):
                     if len(args) > 1:
                         raise TypeError('expected at most 1 arguments, got %d' % len(args))
@@ -123,7 +122,7 @@ except ImportError:
 
                 def __eq__(self, other):
                     if isinstance(other, OrderedDict):
-                        return len(self)==len(other) and self.items() == other.items()
+                        return len(self) == len(other) and self.items() == other.items()
                     return dict.__eq__(self, other)
 
                 def __ne__(self, other):

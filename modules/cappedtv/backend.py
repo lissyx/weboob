@@ -8,7 +8,7 @@
 # To Public License, Version 2, as published by Sam Hocevar. See
 # http://sam.zoy.org/wtfpl/COPYING for more details.
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.video import ICapVideo, BaseVideo
 from weboob.capabilities.collection import ICapCollection, CollectionNotFound
@@ -21,9 +21,9 @@ __all__ = ['CappedBackend']
 
 class CappedBackend(BaseBackend, ICapVideo, ICapCollection):
     NAME = 'cappedtv'
-    MAINTAINER = 'Lord'
+    MAINTAINER = u'Lord'
     EMAIL = 'lord@lordtoniok.com'
-    VERSION = '0.d'
+    VERSION = '0.h'
     DESCRIPTION = 'Capped.tv demoscene website'
     LICENSE = 'WTFPLv2'
     BROWSER = CappedBrowser
@@ -32,7 +32,7 @@ class CappedBackend(BaseBackend, ICapVideo, ICapCollection):
         with self.browser:
             return self.browser.get_video(_id)
 
-    def search_videos(self, pattern, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=None, max_results=None):
+    def search_videos(self, pattern, sortby=ICapVideo.SEARCH_RELEVANCE, nsfw=None):
         with self.browser:
             return self.browser.search_videos(pattern)
 

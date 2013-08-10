@@ -1,0 +1,71 @@
+.\" -*- coding: utf-8 -*-
+.TH QHANDJOOB 1 "03 August 2013" "qhandjoob 0\&.g"
+.SH NAME
+qhandjoob \- search for job
+.SH SYNOPSIS
+.B qhandjoob
+[\-h] [\-dqv] [\-b \fIbackends\fR] ...
+.br
+.B qhandjoob
+[\-\-help] [\-\-version]
+
+.SH DESCRIPTION
+.LP
+
+Qt application to search for job.
+
+.SS Supported websites:
+* adecco (adecco website)
+.br
+* apec (apec website)
+.br
+* lolix (Lolix est un centre de compétences spécialisé dans les technologies à base de Logiciel Libre.)
+.br
+* popolemploi (Pole Emploi website)
+.SH OPTIONS
+.TP
+\fB\-\-version\fR
+show program's version number and exit
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+show this help message and exit
+.TP
+\fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
+what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
+
+.SH LOGGING OPTIONS
+.TP
+\fB\-d\fR, \fB\-\-debug\fR
+display debug messages
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+display only error messages
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+display info messages
+.TP
+\fB\-\-logging\-file=LOGGING_FILE\fR
+file to save logs
+.TP
+\fB\-a\fR, \fB\-\-save\-responses\fR
+save every response
+
+.SH COPYRIGHT
+Copyright(C) 2013 Sébastien Monel
+.LP
+For full COPYRIGHT see COPYING file with weboob package.
+.LP
+.RE
+.SH FILES
+"~/.config/weboob/backends" 
+
+"~/.config/weboob/qhandjoob"
+
+.SH SEE ALSO
+Home page: http://weboob.org/applications/qhandjoob

@@ -22,7 +22,7 @@ from datetime import timedelta
 import sys
 
 from weboob.capabilities.bugtracker import ICapBugTracker, Query, Update, Project, Issue
-from weboob.tools.application.repl import ReplApplication
+from weboob.tools.application.repl import ReplApplication, defaultcount
 from weboob.tools.application.formatters.iformatter import IFormatter, PrettyFormatter
 from weboob.tools.misc import html2text
 
@@ -59,6 +59,7 @@ class IssueFormatter(IFormatter):
                     result += html2text(u.message)
         return result
 
+
 class IssuesListFormatter(PrettyFormatter):
     MANDATORY_FIELDS = ('id', 'project', 'status', 'title', 'category')
 
@@ -71,10 +72,10 @@ class IssuesListFormatter(PrettyFormatter):
 
 class BoobTracker(ReplApplication):
     APPNAME = 'boobtracker'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2011 Romain Bignon'
-    DESCRIPTION = "Console application allowing to send messages on various websites and " \
-                  "to display message threads and contents."
+    DESCRIPTION = "Console application allowing to create, edit, view bug tracking issues."
+    SHORT_DESCRIPTION = "manage bug tracking issues"
     CAPS = ICapBugTracker
     EXTRA_FORMATTERS = {'issue_info': IssueFormatter,
                         'issues_list': IssuesListFormatter,
@@ -95,6 +96,7 @@ class BoobTracker(ReplApplication):
         group.add_option('--category')
         group.add_option('--status')
 
+    @defaultcount(10)
     def do_search(self, line):
         """
         search PROJECT
@@ -132,7 +134,6 @@ class BoobTracker(ReplApplication):
         for backend, issue in self.do('iter_issues', query, backends=backends):
             self.add_object(issue)
             self.format(issue)
-        self.flush()
 
     def complete_get(self, text, line, *ignored):
         args = line.split(' ')
@@ -151,10 +152,9 @@ class BoobTracker(ReplApplication):
 
         issue = self.get_object(line, 'get_issue')
         if not issue:
-            print >>sys.stderr, 'Issue not found: %s' %  line
+            print >>sys.stderr, 'Issue not found: %s' % line
             return 3
         self.format(issue)
-        self.flush()
 
     def complete_comment(self, text, line, *ignored):
         args = line.split(' ')
@@ -335,7 +335,7 @@ class BoobTracker(ReplApplication):
         _id, key, value = self.parse_command_args(line, 3, 1)
         issue = self.get_object(_id, 'get_issue')
         if not issue:
-            print >>sys.stderr, 'Issue not found: %s' %  _id
+            print >>sys.stderr, 'Issue not found: %s' % _id
             return 3
 
         self.prompt_issue(issue, key, value)
@@ -344,7 +344,6 @@ class BoobTracker(ReplApplication):
             if i:
                 print 'Issue %s%s@%s%s updated' % (self.BOLD, issue.id, issue.backend, self.NC)
                 self.format(i)
-        self.flush()
 
     def complete_attach(self, text, line, *ignored):
         args = line.split(' ')

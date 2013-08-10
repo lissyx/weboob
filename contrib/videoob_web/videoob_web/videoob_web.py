@@ -41,7 +41,7 @@ template_lookup = TemplateLookup(directories=[os.path.join(os.path.dirname(__fil
 
 class VideoobWeb(BaseApplication):
     APPNAME = 'videoob-webserver'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2011 Christophe Benz'
     DESCRIPTION = 'WSGI web server application allowing to search for videos on various websites.'
     CAPS = ICapVideo
@@ -100,7 +100,7 @@ class VideoobWeb(BaseApplication):
                                page_url=video.page_url,
                                url=video.url if video.url else '/download?id=%s' % video.id,
                                thumbnail_url=video.thumbnail.url,
-                             ) \
+                             )
                          for video in backend.search_videos(pattern=q, nsfw=nsfw)]
                 if videos:
                     if merge:

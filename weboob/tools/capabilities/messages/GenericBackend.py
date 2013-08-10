@@ -17,8 +17,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-# python2.5 compatibility
-from __future__ import with_statement
 
 import time
 from weboob.capabilities.messages import ICapMessages, Message, Thread
@@ -30,9 +28,9 @@ class GenericNewspaperBackend(BaseBackend, ICapMessages):
     """
     GenericNewspaperBackend class
     """
-    MAINTAINER = 'Julien Hebert'
+    MAINTAINER = u'Julien Hebert'
     EMAIL = 'juke@free.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     STORAGE = {'seen': {}}
     RSS_FEED = None
@@ -40,21 +38,27 @@ class GenericNewspaperBackend(BaseBackend, ICapMessages):
     URL2ID = None
     RSSSIZE = 0
 
+    def _get_thread(self, id):
+        for thread in self.iter_threads():
+            if thread.id == id:
+                return thread
+
     def get_thread(self, _id):
         if isinstance(_id, Thread):
             thread = _id
-            _id = thread.id
+            id = thread.id
         else:
-            thread = None
+            thread = self._get_thread(_id)
+            id = _id
 
         with self.browser:
-            content = self.browser.get_content(_id)
+            content = self.browser.get_content(id)
 
         if content is None:
             return None
 
         if not thread:
-            thread = Thread(_id)
+            thread = Thread(id)
 
         flags = Message.IS_HTML
         if not thread.id in self.storage.get('seen', default={}):

@@ -20,16 +20,16 @@
 
 from weboob.tools.test import BackendTest
 
+
 class WeatherTest(BackendTest):
     BACKEND = 'weather'
-
 
     def test_cities(self):
         paris = self.backend.iter_city_search('crappything&param=;drop database')
         self.assertTrue(len(list(paris)) == 0)
 
         paris = self.backend.iter_city_search('paris')
-        self.assertTrue(len(list(paris)) > 1)
+        self.assertTrue(len(list(paris)) >= 1)
 
         paris = self.backend.iter_city_search('paris france')
         self.assertTrue(len(list(paris)) == 1)

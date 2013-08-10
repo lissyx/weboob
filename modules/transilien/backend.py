@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.travel import ICapTravel, Station, Departure, RoadStep
 from weboob.tools.backend import BaseBackend
@@ -26,11 +26,12 @@ from weboob.tools.backend import BaseBackend
 from .browser import Transilien
 from .stations import STATIONS
 
+
 class TransilienBackend(BaseBackend, ICapTravel):
     NAME = 'transilien'
     MAINTAINER = u'Julien Hébert'
     EMAIL = 'juke@free.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = u"Public transportation in the Paris area"
     BROWSER = Transilien

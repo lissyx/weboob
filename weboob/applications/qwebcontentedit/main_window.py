@@ -23,6 +23,7 @@ from PyQt4.QtCore import SIGNAL
 from PyQt4.QtGui import QMessageBox, QTableWidgetItem
 from PyQt4.QtCore import Qt
 
+from weboob.tools.application.base import MoreResultsAvailable
 from weboob.tools.application.qt import QtMainWindow, QtDo
 from weboob.tools.application.qt.backendcfg import BackendCfg
 from weboob.capabilities.content import ICapContent
@@ -30,8 +31,9 @@ from weboob.tools.misc import to_unicode
 
 from .ui.main_window_ui import Ui_MainWindow
 
+
 class MainWindow(QtMainWindow):
-    def __init__(self, config, weboob, parent=None):
+    def __init__(self, config, weboob, app, parent=None):
         QtMainWindow.__init__(self, parent)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -39,6 +41,7 @@ class MainWindow(QtMainWindow):
         self.config = config
         self.weboob = weboob
         self.backend = None
+        self.app = app
 
         self.connect(self.ui.idEdit,
                      SIGNAL("returnPressed()"),
@@ -102,11 +105,11 @@ class MainWindow(QtMainWindow):
         _id = unicode(self.ui.idEdit.text())
         if not _id:
             return
-        
+
         self.ui.loadButton.setEnabled(False)
         self.ui.loadButton.setText('Loading...')
         self.ui.contentEdit.setReadOnly(True)
-                
+
         backend = str(self.ui.backendBox.currentText())
         self.process = QtDo(self.weboob,
                             self._loadedPage,
@@ -137,7 +140,7 @@ class MainWindow(QtMainWindow):
         self.ui.contentEdit.setPlainText(self.content.content)
         self.setWindowTitle("QWebcontentedit - %s@%s" %(self.content.id,
                                                         backend.name))
-        self.backend = backend    
+        self.backend = backend
 
     def _errorLoadPage(self, backend, error, backtrace):
         """ Error callback for loadPage """
@@ -203,7 +206,7 @@ class MainWindow(QtMainWindow):
 
         self.ui.loadHistoryButton.setEnabled(False)
         self.ui.loadHistoryButton.setText("Loading...")
-        
+
         self.ui.historyTable.clear()
         self.ui.historyTable.setRowCount(0)
 
@@ -212,13 +215,15 @@ class MainWindow(QtMainWindow):
                                                         "Author",
                                                         "Summary"])
         self.ui.historyTable.setColumnWidth(3, 1000)
-        
+
         self.process = QtDo(self.weboob,
                             self._gotRevision,
                             self._errorHistory)
-        self.process.do('iter_revisions',
+        self.process.do(self.app._do_complete,
+                        self.ui.nbRevBox.value(),
+                        (),
+                        'iter_revisions',
                         self.content.id,
-                        max_results=self.ui.nbRevBox.value(),
                         backends=(self.backend,))
 
     def _gotRevision(self, backend, revision):
@@ -234,13 +239,13 @@ class MainWindow(QtMainWindow):
         # are not modifiable (they are modifiable by default)
         item_revision = QTableWidgetItem(revision.id)
         item_revision.setFlags(Qt.ItemIsEnabled)
-        
+
         item_time = QTableWidgetItem(revision.timestamp.strftime('%Y-%m-%d %H:%M:%S'))
         item_time.setFlags(Qt.ItemIsEnabled)
-        
+
         item_author = QTableWidgetItem(revision.author)
         item_author.setFlags(Qt.ItemIsEnabled)
-        
+
         item_summary = QTableWidgetItem(revision.comment)
         item_summary.setFlags(Qt.ItemIsEnabled)
 
@@ -255,11 +260,14 @@ class MainWindow(QtMainWindow):
 
     def _errorHistory(self, backend, error, backtrace):
         """ Loading the history has failed """
+        if isinstance(error, MoreResultsAvailable):
+            return
+
         content = unicode(self.tr('Unable to load history:\n%s\n')) % to_unicode(error)
         if logging.root.level == logging.DEBUG:
             content += '\n%s\n' % to_unicode(backtrace)
         QMessageBox.critical(self, self.tr('Error while loading history'),
                              content, QMessageBox.Ok)
-        
+
         self.ui.loadHistoryButton.setEnabled(True)
         self.ui.loadHistoryButton.setText("Reload")

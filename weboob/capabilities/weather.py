@@ -33,6 +33,7 @@ class Temperature(CapBaseObject):
     unit =       StringField('Input unit')
 
     def __init__(self, value, unit = u''):
+        CapBaseObject.__init__(self, value)
         self.value = value
         if unit not in [u'C', u'F']:
             unit = u''
@@ -42,7 +43,7 @@ class Temperature(CapBaseObject):
         if not self.unit:
             return u'%s' % int(round(self.value))
         elif self.unit == 'F':
-            return u'%sF' % int(round(self.value))
+            return u'%s°F' % int(round(self.value))
         else:
             return u'%s°F' % int(round((self.value * 9.0 / 5.0) + 32))
 
@@ -50,7 +51,7 @@ class Temperature(CapBaseObject):
         if not self.unit:
             return u'%s' % int(round(self.value))
         elif self.unit == 'C':
-            return u'%sC' % int(round(self.value))
+            return u'%s°C' % int(round(self.value))
         else:
             return u'%s°C' % int(round((self.value - 32.0) * 5.0 / 9.0))
 
@@ -71,6 +72,7 @@ class Forecast(CapBaseObject):
         self.high = Temperature(high, unit)
         self.text = text
 
+
 class Current(CapBaseObject):
     """
     Current weather.
@@ -85,6 +87,7 @@ class Current(CapBaseObject):
         self.text = text
         self.temp = Temperature(temp, unit)
 
+
 class City(CapBaseObject):
     """
     City where to find weather.
@@ -95,10 +98,12 @@ class City(CapBaseObject):
         CapBaseObject.__init__(self, id)
         self.name = name
 
+
 class CityNotFound(UserError):
     """
     Raised when a city is not found.
     """
+
 
 class ICapWeather(IBaseCap):
     """

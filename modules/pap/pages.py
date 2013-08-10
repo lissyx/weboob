@@ -49,6 +49,10 @@ class SearchResultsPage(BasePage):
     def iter_housings(self):
         for div in self.document.getroot().cssselect('div.annonce-resume'):
             a = div.cssselect('td.lien-annonce')[0].find('a')
+            if a is None:
+                # not a real announce.
+                continue
+
             id = a.attrib['href'].split('-')[-1]
             housing = Housing(id)
             housing.title = a.text.strip()
@@ -68,7 +72,7 @@ class SearchResultsPage(BasePage):
 
             metro = div.cssselect('p.metro')
             if len(metro) > 0:
-                housing.station = metro[0].text.strip()
+                housing.station = unicode(metro[0].text.strip())
             else:
                 housing.station = NotAvailable
 
@@ -76,13 +80,14 @@ class SearchResultsPage(BasePage):
             b = p.findall('b')
             if len(b) > 0:
                 housing.text = b[0].tail.strip()
-                housing.location = b[0].text
+                housing.location = unicode(b[0].text)
             else:
                 housing.text = p.text.strip()
 
             housing.photos = NotAvailable
 
             yield housing
+
 
 class HousingPage(BasePage):
     def get_housing(self):
@@ -108,7 +113,7 @@ class HousingPage(BasePage):
         b = p.findall('b')
         if len(b) > 0:
             housing.text = b[0].tail.strip()
-            housing.location = b[0].text
+            housing.location = unicode(b[0].text)
             if len(b) > 1:
                 housing.phone = b[1].text
         else:

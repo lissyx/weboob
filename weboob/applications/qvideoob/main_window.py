@@ -29,8 +29,9 @@ from weboob.applications.qvideoob.ui.main_window_ui import Ui_MainWindow
 from .video import Video
 from .minivideo import MiniVideo
 
+
 class MainWindow(QtMainWindow):
-    def __init__(self, config, weboob, parent=None):
+    def __init__(self, config, weboob, app, parent=None):
         QtMainWindow.__init__(self, parent)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -38,6 +39,7 @@ class MainWindow(QtMainWindow):
         self.config = config
         self.weboob = weboob
         self.minivideos = []
+        self.app = app
 
         self.ui.sortbyEdit.setCurrentIndex(int(self.config.get('settings', 'sortby')))
         self.ui.nsfwCheckBox.setChecked(int(self.config.get('settings', 'nsfw')))
@@ -87,7 +89,7 @@ class MainWindow(QtMainWindow):
     def updateVideosDisplay(self):
         for minivideo in self.minivideos:
             if (minivideo.video.nsfw and self.ui.nsfwCheckBox.isChecked() or
-                not minivideo.video.nsfw and self.ui.sfwCheckBox.isChecked()):
+                    not minivideo.video.nsfw and self.ui.sfwCheckBox.isChecked()):
                 minivideo.show()
             else:
                 minivideo.hide()
@@ -108,7 +110,7 @@ class MainWindow(QtMainWindow):
         backend_name = str(self.ui.backendEdit.itemData(self.ui.backendEdit.currentIndex()).toString())
 
         self.process = QtDo(self.weboob, self.addVideo)
-        self.process.do('search_videos', pattern, self.ui.sortbyEdit.currentIndex(), nsfw=True, max_results=20, backends=backend_name)
+        self.process.do(self.app._do_complete, 20, (), 'search_videos', pattern, self.ui.sortbyEdit.currentIndex(), nsfw=True, backends=backend_name)
 
     def addVideo(self, backend, video):
         if not backend:
@@ -119,7 +121,7 @@ class MainWindow(QtMainWindow):
         self.ui.scrollAreaContent.layout().addWidget(minivideo)
         self.minivideos.append(minivideo)
         if (video.nsfw and not self.ui.nsfwCheckBox.isChecked() or
-            not video.nsfw and not self.ui.sfwCheckBox.isChecked()):
+                not video.nsfw and not self.ui.sfwCheckBox.isChecked()):
             minivideo.hide()
 
     def openURL(self):

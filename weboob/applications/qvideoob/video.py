@@ -18,11 +18,12 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from PyQt4.QtCore  import QUrl
+from PyQt4.QtCore import QUrl
 from PyQt4.QtGui import QDialog
 from PyQt4.phonon import Phonon
 
 from weboob.applications.qvideoob.ui.video_ui import Ui_Video
+
 
 class Video(QDialog):
     def __init__(self, video, parent=None):
@@ -47,5 +48,9 @@ class Video(QDialog):
         self.ui.videoPlayer.play()
 
     def closeEvent(self, event):
+        self.ui.videoPlayer.stop()
+        event.accept()
+
+    def hideEvent(self, event):
         self.ui.videoPlayer.stop()
         event.accept()

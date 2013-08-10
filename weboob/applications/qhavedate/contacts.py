@@ -37,6 +37,7 @@ from .ui.thread_message_ui import Ui_ThreadMessage
 from .ui.profile_ui import Ui_Profile
 from .ui.notes_ui import Ui_Notes
 
+
 class ThreadMessage(QFrame):
     """
     This class represents a message in the thread tab.
@@ -65,11 +66,11 @@ class ThreadMessage(QFrame):
             content = message.content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', '<br />')
         self.ui.contentLabel.setText(content)
 
-
     def __eq__(self, m):
         if not isinstance(m, Message):
             return False
         return self.message == m.message
+
 
 class ContactThread(QWidget):
     """
@@ -197,8 +198,6 @@ class ContactThread(QWidget):
         QMessageBox.critical(self, self.tr('Error while posting reply'),
                              content, QMessageBox.Ok)
         self.process_reply = None
-
-
 
 
 class ContactProfile(QWidget):
@@ -344,6 +343,7 @@ class ContactProfile(QWidget):
                 text += '<br /><font color=#ff0000><i>(Hidden photo)</i></font>'
             self.ui.photoUrlLabel.setText(text)
 
+
 class ContactNotes(QWidget):
     """ Widget for storing notes about a contact """
 
@@ -361,7 +361,6 @@ class ContactNotes(QWidget):
         self.process.do('get_notes', self.contact.id, backends=(self.contact.backend,))
 
         self.connect(self.ui.saveButton, SIGNAL('clicked()'), self.saveNotes)
-
 
     def _getNotes_cb(self, backend, data):
         if not backend or not data:
@@ -403,6 +402,7 @@ class ContactNotes(QWidget):
             QMessageBox.critical(self, self.tr('Error while saving notes'),
             content, QMessageBox.Ok)
 
+
 class IGroup(object):
     def __init__(self, weboob, id, name):
         self.id = id
@@ -411,6 +411,7 @@ class IGroup(object):
 
     def iter_contacts(self, cb):
         raise NotImplementedError()
+
 
 class MetaGroup(IGroup):
     def iter_contacts(self, cb):
@@ -430,6 +431,7 @@ class MetaGroup(IGroup):
         elif not backend:
             self.process = None
             cb(None)
+
 
 class ContactsWidget(QWidget):
     def __init__(self, weboob, parent=None):
@@ -591,5 +593,3 @@ class ContactsWidget(QWidget):
             content += u'\n%s\n' % to_unicode(backtrace)
         QMessageBox.critical(self, self.tr('Error while getting contact'),
                              content, QMessageBox.Ok)
-
-

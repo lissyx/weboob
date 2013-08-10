@@ -30,6 +30,7 @@ __all__ = ['StationNotFound', 'DeparturesPage']
 class StationNotFound(UserError):
     pass
 
+
 class DeparturesPage(BasePage):
     def iter_routes(self):
         try:
@@ -43,19 +44,22 @@ class DeparturesPage(BasePage):
                 continue
 
             code_mission = self.parser.select(tr, 'td[headers=Code_de_mission] a', 1).text.strip()
-            time = self.parser.select(tr, 'td[headers=Heure_de_passage]', 1).text.strip()
+            time_s = self.parser.select(tr, 'td[headers=Heure_de_passage]', 1).text.strip().rstrip(u'\xa0*')
             destination = self.parser.select(tr, 'td[headers=Destination]', 1).text.strip()
             plateform = self.parser.select(tr, 'td[headers=Voie]', 1).text.strip()
 
+            late_reason = None
+            time = None
             try :
-                time = datetime.datetime.combine(datetime.date.today(), datetime.time(*[int(x) for x in time.split(':')]))
+                time = datetime.datetime.combine(datetime.date.today(), datetime.time(*[int(x) for x in time_s.split(':')]))
             except ValueError:
-                self.logger.warning('Unable to parse datetime "%s"' % time)
+                late_reason = time_s
+                self.logger.warning('Unable to parse datetime "%s"' % time_s)
 
             yield {'type':        to_unicode(code_mission),
                    'time':        time,
                    'departure':   to_unicode(departure),
                    'arrival':     to_unicode(destination),
                    'late':        datetime.time(),
-                   'late_reason': None,
+                   'late_reason': late_reason,
                    'plateform':   to_unicode(plateform)}

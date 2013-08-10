@@ -29,7 +29,7 @@ class CappedVideo(BaseVideo):
     def __init__(self, *args, **kwargs):
         BaseVideo.__init__(self, *args, **kwargs)
         self.nsfw = False
-        self.ext = 'mp4'
+        self.ext = u'mp4'
 
     @classmethod
     def id2url(cls, _id):
@@ -39,6 +39,11 @@ class CappedVideo(BaseVideo):
 # parser for search pages
 class IndexPage(BasePage):
     def iter_videos(self):
+        # When no results are found, the website returns random results
+        sb = self.parser.select(self.document.getroot(), 'div.search form input.searchbox', 1)
+        if sb.value == 'No Results Found':
+            return
+
         #Extracting meta data from results page
         vidbackdrop_list = self.parser.select(self.document.getroot(), 'div.vidBackdrop    ')
         for vidbackdrop in vidbackdrop_list:
@@ -48,8 +53,8 @@ class IndexPage(BasePage):
             video = CappedVideo(_id)
             video.set_empty_fields(NotAvailable, ('url',))
 
-            video.title = self.parser.select(vidbackdrop, 'div.vidTitle a', 1).text
-            video.author = self.parser.select(vidbackdrop, 'div.vidAuthor a', 1).text
+            video.title = to_unicode(self.parser.select(vidbackdrop, 'div.vidTitle a', 1).text)
+            video.author = to_unicode(self.parser.select(vidbackdrop, 'div.vidAuthor a', 1).text)
 
             thumbnail_url = 'http://cdn.capped.tv/pre/%s.png' % _id
             video.thumbnail = Thumbnail(thumbnail_url)
@@ -90,7 +95,7 @@ class VideoPage(BasePage):
         video.title = to_unicode(title_tmp.text.strip())
 
         # Videopages doesn't have duration information (only results pages)
-        video.url = 'http://cdn.capped.tv/vhq/%s.mp4' % _id
+        video.url = u'http://cdn.capped.tv/vhq/%s.mp4' % _id
         return video
 
 

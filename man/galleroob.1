@@ -1,6 +1,7 @@
-.TH GALLEROOB 1 "04 May 2012" "galleroob 0\&.c"
+.\" -*- coding: utf-8 -*-
+.TH GALLEROOB 1 "03 August 2013" "galleroob 0\&.g"
 .SH NAME
-galleroob
+galleroob \- browse and download web image galleries
 .SH SYNOPSIS
 .B galleroob
 [\-dqv] [\-b \fIbackends\fR] [\-cnfs] [\fIcommand\fR [\fIarguments\fR..]]
@@ -24,6 +25,8 @@ galleroob browses and downloads web image galleries
 .br
 * mangafox (Manga Fox manga reading website)
 .br
+* mangago (Mangago manga reading site)
+.br
 * mangahere (Manga Here manga reading website)
 .br
 * mangareader (MangaReader manga reading website)
@@ -46,6 +49,10 @@ Get information about a gallery.
 \fBsearch\fR \fIPATTERN\fR
 .br
 List galleries matching a PATTERN.
+.br
+
+.br
+Default is limited to 10 results.
 .SH WEBOOB COMMANDS
 .TP
 \fBbackends\fR [\fIACTION\fR] [\fIBACKEND_NAME\fR]...
@@ -150,7 +157,7 @@ Availables: debug, info, warning, error.
 .br
 * default is an alias for warning
 .TP
-\fBls\fR [\fIPATH\fR]
+\fBls\fR [\-d] [\fIPATH\fR]
 .br
 List objects in current path.
 .br
@@ -182,6 +189,12 @@ show this help message and exit
 .TP
 \fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
 what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
 
 .SH LOGGING OPTIONS
 .TP
@@ -206,7 +219,7 @@ save every response
 filter result items to display given a boolean expression
 .TP
 \fB\-n COUNT\fR, \fB\-\-count=COUNT\fR
-get a maximum number of results (all backends merged)
+limit number of results (from each backends)
 .TP
 \fB\-s SELECT\fR, \fB\-\-select=SELECT\fR
 select result item keys to display (comma separated)
@@ -214,8 +227,8 @@ select result item keys to display (comma separated)
 .SH FORMATTING OPTIONS
 .TP
 \fB\-f FORMATTER\fR, \fB\-\-formatter=FORMATTER\fR
-select output formatter (csv, gallery_list, htmltable, multiline, simple, table,
-webkit)
+select output formatter (csv, gallery_list, htmltable, json, multiline, simple,
+table, webkit)
 .TP
 \fB\-\-no\-header\fR
 do not display header

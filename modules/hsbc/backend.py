@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright(C) 2012 Romain Bignon
+# Copyright(C) 2012-2013 Romain Bignon
 #
 # This file is part of weboob.
 #
@@ -17,11 +17,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
+
 
 from weboob.capabilities.bank import ICapBank, AccountNotFound
 from weboob.tools.backend import BaseBackend, BackendConfig
-from weboob.tools.value import ValueBackendPassword
+from weboob.tools.value import ValueBackendPassword, Value
 
 from .browser import HSBC
 
@@ -31,18 +31,20 @@ __all__ = ['HSBCBackend']
 
 class HSBCBackend(BaseBackend, ICapBank):
     NAME = 'hsbc'
-    MAINTAINER = 'Romain Bignon'
+    MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = 'HSBC France bank website'
     CONFIG = BackendConfig(ValueBackendPassword('login',      label='Account ID', masked=False),
-                           ValueBackendPassword('password',   label='Password', regexp='^(\d+|)$'))
+                           ValueBackendPassword('password',   label='Password'),
+                           Value(               'secret',     label='Secret (optional)', default=''))
     BROWSER = HSBC
 
     def create_default_browser(self):
         return self.create_browser(self.config['login'].get(),
-                                   self.config['password'].get())
+                                   self.config['password'].get(),
+                                   self.config['secret'].get())
 
     def iter_accounts(self):
         for account in self.browser.get_accounts_list():
@@ -58,5 +60,13 @@ class HSBCBackend(BaseBackend, ICapBank):
 
     def iter_history(self, account):
         with self.browser:
-            for history in self.browser.get_history(account._link_id):
-                yield history
+            for tr in self.browser.get_history(account):
+                # If there are deferred cards, strip CB invoices.
+                if not tr._coming and (not tr.raw.startswith('FACTURES CB') or len(account._card_links) == 0):
+                    yield tr
+
+    def iter_coming(self, account):
+        with self.browser:
+            for tr in self.browser.get_history(account):
+                if tr._coming:
+                    yield tr

@@ -24,10 +24,12 @@ from logging import warning
 
 import gtk
 
+
 class FakeConic(object):
     STATUS_CONNECTED = None
     STATUS_DISCONNECTED = None
     CONNECT_FLAG_NONE = None
+
     def Connection(self):
         raise NotImplementedError()
 try:
@@ -37,7 +39,7 @@ except ImportError:
 else:
     toolkit = hildon
 
-try :
+try:
     import conic
 except ImportError:
     warning("conic is not found")
@@ -49,6 +51,7 @@ from logging import debug
 
 __all__ = ['Masstransit']
 
+
 class MasstransitHildon():
     "hildon interface"
 
@@ -57,7 +60,7 @@ class MasstransitHildon():
         status = event.get_status()
         if status == conic.STATUS_CONNECTED:
             self.connected = True
-            if self.touch_selector_entry_filled == False:
+            if not self.touch_selector_entry_filled:
                 debug("connected, now fill")
                 self.fill_touch_selector_entry()
             if self.refresh_in_progress:
@@ -70,7 +73,7 @@ class MasstransitHildon():
         self.refresh_in_progress = False
         self.connected = False
         self.weboob = weboob
-        try :
+        try:
             self.connection = conic.Connection()
             self.connection.connect("connection-event", self.connect_event)
             self.connection.set_property("automatic-connection-events", True)
@@ -80,7 +83,7 @@ class MasstransitHildon():
 
         horizontal_box = gtk.HBox()
         self.main_window = toolkit.Window()
-        try :
+        try:
             self.refresh_button = toolkit.Button(
                 gtk.HILDON_SIZE_AUTO_WIDTH | gtk.HILDON_SIZE_FINGER_HEIGHT,
                 hildon.BUTTON_ARRANGEMENT_HORIZONTAL,
@@ -131,7 +134,6 @@ class MasstransitHildon():
         self.treestore = gtk.TreeStore(str, str, str, str, str)
         treeview = gtk.TreeView(self.treestore)
 
-
         treeview.append_column(
             gtk.TreeViewColumn(
                 'Train',
@@ -164,8 +166,6 @@ class MasstransitHildon():
                 gtk.CellRendererText(),
                 text=4
             ))
-
-
 
         vertical_box = gtk.VBox()
         vertical_box.pack_start(horizontal_box)
@@ -223,7 +223,7 @@ class MasstransitHildon():
         "the refresh button is clicked"
         debug("on_refresh_button_clicked")
         self.refresh_in_progress = True
-        try :
+        try:
             self.connection.request_connection(conic.CONNECT_FLAG_NONE)
         except AttributeError:
             if isinstance(conic, FakeConic):
@@ -232,7 +232,7 @@ class MasstransitHildon():
                 raise
 
     def check_station_input(self, widget, user_data):
-        if self.combo_source.get_current_text() is None :
+        if self.combo_source.get_current_text() is None:
             self.picker_button_dest.set_sensitive(False)
             self.refresh_button.set_sensitive(False)
             self.retour_button.set_sensitive(False)
@@ -251,7 +251,7 @@ class MasstransitHildon():
         banner.set_timeout(10000)
         hildon.hildon_gtk_window_set_progress_indicator(self.main_window, 1)
         self.treestore.clear()
-        try :
+        try:
             source_text = self.combo_source.get_current_text()
             dest_text = self.combo_dest.get_current_text()
         except AttributeError:
@@ -278,8 +278,10 @@ class MasstransitHildon():
 class Masstransit(BaseApplication):
     "Application Class"
     APPNAME = 'masstransit'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2011 Julien Hébert'
+    DESCRIPTION = "Maemo application allowing to search for train stations and get departure times."
+    SHORT_DESCRIPTION = "search for train stations and departures"
 
     def main(self, argv):
         self.load_backends(ICapTravel)

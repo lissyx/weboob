@@ -18,7 +18,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
-from weboob.tools.capabilities.messages.genericArticle import GenericNewsPage
+from weboob.tools.capabilities.messages.genericArticle import GenericNewsPage,\
+        try_drop_tree, clean_relativ_urls
 
 
 class ArticlePage(GenericNewsPage):
@@ -31,15 +32,8 @@ class ArticlePage(GenericNewsPage):
 
     def get_body(self):
         div = self.document.getroot().find('.//div[@class="sectbody"]')
-        for a in div.findall('.//a'):
-            try:
-                if a.attrib["href"][0:7] != "http://":
-                    a.attrib["href"] = "http://taz.de/" + a.attrib["href"]
-            except:
-                continue
-        for img in div.findall('.//img'):
-            if img.attrib["src"][0:7] != "http://":
-                img.attrib["src"] = "http://taz.de/" + img.attrib["src"]
+        try_drop_tree(self.parser, div, "div.anchor")
+        clean_relativ_urls(div, "http://taz.de")
 
         return self.parser.tostring(div)
 

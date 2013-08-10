@@ -1,6 +1,7 @@
-.TH QBOOBMSG 1 "04 May 2012" "qboobmsg 0\&.c"
+.\" -*- coding: utf-8 -*-
+.TH QBOOBMSG 1 "03 August 2013" "qboobmsg 0\&.g"
 .SH NAME
-qboobmsg
+qboobmsg \- send and receive message threads
 .SH SYNOPSIS
 .B qboobmsg
 [\-h] [\-dqv] [\-b \fIbackends\fR] ...
@@ -27,6 +28,8 @@ Qt application allowing to read messages on various websites and reply to them.
 * fourchan (4chan image board)
 .br
 * hds (Histoires de Sexe French erotic novels)
+.br
+* hellobank (Hello Bank ! website)
 .br
 * inrocks (Les Inrocks French news website)
 .br
@@ -57,6 +60,12 @@ show this help message and exit
 .TP
 \fB\-b BACKENDS\fR, \fB\-\-backends=BACKENDS\fR
 what backend(s) to enable (comma separated)
+.TP
+\fB\-e EXCLUDE_BACKENDS\fR, \fB\-\-exclude\-backends=EXCLUDE_BACKENDS\fR
+what backend(s) to exclude (comma separated)
+.TP
+\fB\-I\fR, \fB\-\-insecure\fR
+do not validate SSL
 
 .SH LOGGING OPTIONS
 .TP

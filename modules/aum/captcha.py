@@ -20,9 +20,16 @@
 
 import hashlib
 import sys
-import Image
 
-class CaptchaError(Exception): pass
+try:
+    from PIL import Image
+except ImportError:
+    raise ImportError('Please install python-imaging')
+
+
+class CaptchaError(Exception):
+    pass
+
 
 class Tile(object):
     hash = {
@@ -111,6 +118,7 @@ class Tile(object):
             print 'hash: %s' % checksum
             raise CaptchaError()
 
+
 class Captcha(object):
     def __init__(self, f):
         self.img = Image.open(f)
@@ -152,6 +160,7 @@ class Captcha(object):
             s += tile.letter
         return s
 
+
 class Decoder(object):
     def __init__(self):
         self.hash = {}
@@ -188,7 +197,7 @@ class Decoder(object):
 
     def main(self):
         try:
-            while 1:
+            while True:
                 self.process()
         except KeyboardInterrupt:
             print ''

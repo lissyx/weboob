@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright(C) 2009-2012  Romain Bignon
+# Copyright(C) 2009-2013  Romain Bignon
 #
 # This file is part of weboob.
 #
@@ -24,12 +24,14 @@ from logging import warning
 
 from weboob.tools.browser import BaseBrowser, BrowserIncorrectPassword, BrowserPasswordExpired
 from weboob.capabilities.bank import TransferError, Transfer
-from .pages import AccountsList, AccountHistory, ChangePasswordPage, \
-                   AccountComing, AccountPrelevement, TransferPage, \
-                   TransferConfirmPage, TransferCompletePage, \
-                   LoginPage, ConfirmPage, InfoMessagePage, \
-                   MessagePage, MessagesPage
 
+from .perso.accounts_list import AccountsList, AccountPrelevement
+from .perso.transactions import AccountHistory, AccountComing
+from .perso.transfer import TransferPage, TransferConfirmPage, TransferCompletePage
+from .perso.login import LoginPage, ConfirmPage, ChangePasswordPage, InfoMessagePage
+from .perso.messages import MessagePage, MessagesPage
+
+from .pro import ProAccountsList, ProAccountHistory
 
 __all__ = ['BNPorc']
 
@@ -37,6 +39,7 @@ __all__ = ['BNPorc']
 class BNPorc(BaseBrowser):
     DOMAIN = 'www.secure.bnpparibas.net'
     PROTOCOL = 'https'
+    CERTHASH = ['5511f0ff19c982b6351c17b901bfa7419f075edb13f2df41e446248beb7866bb', 'fa8cb72ef2e46054469af916f7ec222b1904901fecde8511a0f769ba0385410d']
     ENCODING = None  # refer to the HTML encoding
     PAGES = {'.*pageId=unedescomptes.*':                    AccountsList,
              '.*pageId=releveoperations.*':                 AccountHistory,
@@ -53,6 +56,11 @@ class BNPorc(BaseBrowser):
              '.*Action=DSP_MSG.*':                          InfoMessagePage,
              '.*MessagesRecus.*':                           MessagesPage,
              '.*BmmFicheLireMessage.*':                     MessagePage,
+
+             # Pro
+             'https?://www.secure.bnpparibas.net/banque/portail/entrepros/Fiche\?.*identifiant=PRO_Une_Comptes.*':  ProAccountsList,
+             'https?://www.secure.bnpparibas.net/SAF_ROP.*':  ProAccountHistory,
+             'https?://www.secure.bnpparibas.net/NS_AVEDT.*':  ProAccountHistory,
             }
 
     def __init__(self, *args, **kwargs):
@@ -139,56 +147,87 @@ class BNPorc(BaseBrowser):
 
         return None
 
-    def iter_history(self, id):
-        if id is None:
+    def iter_history(self, account):
+        if account._link_id is None:
             return iter([])
 
-        if not self.is_on_page(AccountsList):
-            self.location('/NSFR?Action=DSP_VGLOBALE')
+        if account._stp is not None:
+            # Pro
+            self.location(self.buildurl('/SAF_ROP', Origine='DSP_HISTOCPT', ch4=account._link_id, stp=account._stp))
+        else:
+            # Perso
+            if not self.is_on_page(AccountsList):
+                self.location('/NSFR?Action=DSP_VGLOBALE')
 
-        execution = self.page.document.xpath('//form[@name="goToApplication"]/input[@name="execution"]')[0].attrib['value']
-        data = {'gt':           'homepage:basic-theme',
-                'externalIAId': 'IAStatements',
-                'cboFlowName':  'flow/iastatement',
-                'contractId':   id,
-                'groupId':      '-2',
-                'pastOrPendingOperations': 1,
-                'groupSelected':'-2',
-                'step':         'STAMENTS',
-                'pageId':       'releveoperations',
-                'operationsPerPage': 100,
-                '_eventId':     'changeOperationsPerPage',
-                'sendEUD':      'true',
-                'execution':    execution,
-               }
+            execution = self.page.document.xpath('//form[@name="goToApplication"]/input[@name="execution"]')[0].attrib['value']
+            data = {'gt':           'homepage:basic-theme',
+                    'externalIAId': 'IAStatements',
+                    'cboFlowName':  'flow/iastatement',
+                    'contractId':   account._link_id,
+                    'groupId':      '-2',
+                    'pastOrPendingOperations': 1,
+                    'groupSelected':'-2',
+                    'step':         'STAMENTS',
+                    'pageId':       'releveoperations',
+                    #'operationsPerPage': 100,
+                    #'_eventId':     'changeOperationsPerPage',
+                    'sendEUD':      'true',
+                    'execution':    execution,
+                   }
 
-        self.location('https://www.secure.bnpparibas.net/banque/portail/particulier/FicheA', urllib.urlencode(data))
+            self.location('https://www.secure.bnpparibas.net/banque/portail/particulier/FicheA', urllib.urlencode(data))
 
-        execution = self.page.document.xpath('//form[@name="displayStatementForm"]/input[@name="execution"]')[0].attrib['value']
-        data = {'_eventId':             'changeOperationsPerPage',
-                'categoryId':           '',
-                'contractId':           '',
-                'execution':            execution,
-                'groupId':              '',
-                'listCheckedOp':        '',
-                'myPage':               1,
-                'operationId':          '',
-                'operationsPerPage':    100,
-                'pageId':               'releveoperations',
-               }
-        self.location('https://www.secure.bnpparibas.net/banque/portail/particulier/FicheA', urllib.urlencode(data))
+            execution = self.page.document.xpath('//form[@name="displayStatementForm"]/input[@name="_flowExecutionKey"]')[0].attrib['value']
+            data = {'_eventId':                  'changeOperationsPerPage',
+                    'newCategoryId':             '',
+                    'categorisationInProgress':  '',
+                    'contractId':                account._link_id,
+                    '_flowExecutionKey':         execution,
+                    'groupId':                   '-2',
+                    'operations.objectsPerPage': 100,
+                    'operations.pageNumber':     1,
+                    'pageId':                    'releveoperations',
+                   }
+
+            # it's not a joke, BNP guys are really crappy.
+            for i in xrange(30):
+                data['_operations.list[%d].checkedOff' % i] = 'on'
+                data['_operations.list[%d].selectedForCategorization' % i] = 'on'
+            self.location('https://www.secure.bnpparibas.net/banque/portail/particulier/FicheA', urllib.urlencode(data))
 
         return self.page.iter_operations()
 
-    def iter_coming_operations(self, id):
-        if id is None:
+    def iter_coming_operations(self, account):
+        if account._link_id is None:
             return iter([])
 
-        if not self.is_on_page(AccountsList):
-            self.location('/NSFR?Action=DSP_VGLOBALE')
-        execution = self.page.get_execution_id()
-        self.location('/banque/portail/particulier/FicheA?externalIAId=IAStatements&contractId=%d&pastOrPendingOperations=2&pageId=mouvementsavenir&execution=%s' % (int(id), execution))
-        return self.page.iter_operations()
+        if account._stp is not None:
+            # Pro
+            self.location(self.buildurl('/NS_AVEDT', Origine='DSP_DT', ch4=account._link_id, stp=account._stp))
+        else:
+            # Perso
+            if not self.is_on_page(AccountsList):
+                self.location('/NSFR?Action=DSP_VGLOBALE')
+
+            execution = self.page.document.xpath('//form[@name="goToApplication"]/input[@name="execution"]')[0].attrib['value']
+            data = {'gt':           'homepage:basic-theme',
+                    'externalIAId': 'IAStatements',
+                    'cboFlowName':  'flow/iastatement',
+                    'contractId':   account._link_id,
+                    'groupId':      '-2',
+                    'pastOrPendingOperations': 2,
+                    'groupSelected':'-2',
+                    'step':         'STAMENTS',
+                    'pageId':       'mouvementsavenir',
+                    #'operationsPerPage': 100,
+                    #'_eventId':     'changeOperationsPerPage',
+                    'sendEUD':      'true',
+                    'execution':    execution,
+                   }
+
+            self.location('https://www.secure.bnpparibas.net/banque/portail/particulier/FicheA', urllib.urlencode(data))
+
+        return self.page.iter_coming_operations()
 
     @check_expired_password
     def get_transfer_accounts(self):

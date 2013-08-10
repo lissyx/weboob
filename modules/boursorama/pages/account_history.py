@@ -19,16 +19,15 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from datetime import date
+from urlparse import urlparse
 import re
 
 from weboob.tools.browser import BasePage
-from weboob.capabilities.bank import Transaction
 from weboob.tools.capabilities.bank.transactions import FrenchTransaction
 
 
-
 __all__ = ['AccountHistory']
+
 
 class Transaction(FrenchTransaction):
     PATTERNS = [(re.compile(u'^CHQ\. (?P<text>.*)'),        FrenchTransaction.TYPE_CHECK),
@@ -43,37 +42,44 @@ class Transaction(FrenchTransaction):
                 (re.compile('^REM CHQ (?P<text>.*)'), FrenchTransaction.TYPE_DEPOSIT),
                ]
 
+
 class AccountHistory(BasePage):
-
-    def on_loaded(self):
-        self.operations = []
-
-        for form in self.document.getiterator('form'):
-            if form.attrib.get('name', '') == 'marques':
-                for tr in form.getiterator('tr'):
-                    tds = tr.findall('td')
-                    if len(tds) != 6:
-                        continue
-                    # tds[0]: operation
-                    # tds[1]: valeur
-                    d = date(*reversed([int(x) for x in tds[1].text.split('/')]))
-                    labeldiv = tds[2].find('div')
-                    label = u''
-                    label += labeldiv.text
-                    label = label.strip(u' \n\t')
-
-                    category = labeldiv.attrib.get('title', '')
-                    useless, sep, category = [part.strip() for part in category.partition(':')]
-
-                    debit = tds[3].text or ""
-                    credit = tds[4].text or ""
-
-                    operation = Transaction(len(self.operations))
-                    operation.parse(date=d, raw=label)
-                    operation.set_amount(credit, debit)
-                    operation.category = category
-
-                    self.operations.append(operation)
-
     def get_operations(self):
-        return self.operations
+        for form in self.document.xpath('//form[@name="marques"]'):
+            for tr in form.xpath('.//tbody/tr'):
+                if tr.attrib.get('class', '') == 'total' or 'style' in tr.attrib:
+                    continue
+
+                date = self.parser.tocleanstring(tr.cssselect('td.operation span.DateOperation')[0])
+                span = tr.cssselect('td.operation span, td.operation a')[-1]
+                # remove links
+                for font in span.xpath('./font'):
+                    font.drop_tree()
+                label = self.parser.tocleanstring(span)
+                amount = self.parser.tocleanstring(tr.cssselect('td.amount')[0])
+
+                try:
+                    _id = tr.xpath('.//input[@type="hidden"]')[0].attrib['id'].split('_')[1]
+                except KeyError:
+                    _id = 0
+
+                operation = Transaction(_id)
+                operation.parse(date=date, raw=label)
+                operation.set_amount(amount)
+
+                yield operation
+
+    def get_next_url(self):
+        items = self.document.getroot().cssselect('ul.menu-lvl-0 li')
+
+        current = False
+        for li in reversed(items):
+            if li.attrib.get('class', '') == 'active':
+                current = True
+            elif current:
+                a = li.find('a')
+                if 'year' in a.attrib.get('href', ''):
+                    url = urlparse(self.url)
+                    return url.path + a.attrib['href']
+                else:
+                    return None

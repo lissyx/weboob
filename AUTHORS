@@ -1,14 +1,19 @@
 Weboob is a free software written by:
 
 Romain Bignon <romain@weboob.org>
-        * Manager;
         * Core team;
         * Qt Applications;
         * Maintainer of too many modules.
 
 Laurent Bachelier <laurent@bachelier.name>
         * Core team;
-        * Pastealacon, PasteBin and RadioFrance modules maintainer.
+        * Pastealacon, PasteBin, PayPal and RadioFrance modules maintainer.
+
+Florent Fourcot <weboob@flo.fourcot.fr>
+        * Release manager;
+        * Champslibres, Freemobile, ING, LeclercMobile, Presseurop, Sachsen,
+          Nettokom, dresdenwetter and Taz modules maintainer;
+        * BNPorc patches.
 
 Julien Hebert <juke@free.fr>
         * Developer of masstransit;
@@ -19,14 +24,11 @@ Noe Rubinstein <noe.rubinstein@gmail.com>
         * Bototo, Eatmanga, MangaFox, MangaHere, MangaReader, Mangatoshokan
           and Simplyreadit modules maintainer.
 
-Florent Fourcot <weboob@flo.fourcot.fr>
-        * Champslibre, Freemobile, ING, Presseurop, Sachsen and Taz modules
-          maintainer;
-        * BNPorc patches.
-
 Julien Veyssier <julien.veyssier@aiur.fr>
-        * CreditMutuel, Geolocip, Ipinfodb, IsoHunt, Kickass, and Piratebay
-          modules maintainer.
+        * Suboob, Cineoob, QCineoob and Booblyrics developer
+        * CreditMutuel, Geolocip, Ipinfodb, IsoHunt, Kickass, Piratebay,
+          Attilasub, Opensubtitles, Tvsubtitle, Btmon, Imdb,
+          Seeklyrics, Parolesmusique and Parolesmania modules maintainer.
 
 Christophe Benz <christophe.benz@gmail.com>
         * Bouygues, INA, SFR and Youtube modules maintainer.
@@ -40,18 +42,33 @@ Nicolas Duhamel <nicolas@jombi.fr>
 Clément Schreiner <clemux@clemux.info>
         * MediaWiki and Newsfeed modules maintainer.
 
+François Revol <revol@free.fr>
+        * Europarl, GDCVault and Vimeo modules maintainer.
+        * Canaplus and qvideoob fixes
+
+Benjamin Carton <carton_ben@yahoo.fr>
+        * vlille, grooveshark, adecco, apec, lolix and popolemploi modules 
+          maintainer.
+        * handjoob application.
+
 Pierre Mazière <pierre.maziere@gmx.com>
         * LCL module maintainer;
         * BNPorc fixes.
 
 Xavier Guerrin <xavier@tuxfamily.org>
-        * CrAgr module maintainer.
+        * Author of the CrAgr module.
 
 Gabriel Kerneis <kerneis@pps.jussieu.fr>
         * Boursorama module maintainer.
 
+Kevin Pouget <weboob@kevin.pouget.me>
+        * CreditCooperatif module maintainer.
+
 Gilles Quenot <gilles.quenot@gmail.com>
         * Fortuneo module maintainer.
+
+Mathieu Jourdan <mathieu.jourdan@gresille.org>
+        * GdfSuez module maintainer.
 
 Benjamin Drieu <benjamin@drieu.org>
         * TricTracTV module maintainer.
@@ -65,6 +82,13 @@ Lord <lord@lordtoniok.com>
 Lucien Loiseau <loiseau.lucien@gmail.com>
         * GoogleTranslate module maintainer.
 
+Christophe Lampin <weboob@lampin.net>
+        * HelloBank, ameli and amelipro modules maintainer.
+        * Patchs on cragr and freemobile
+
+Sébastien Monel <sebastien.monel@gmail.com>
+        * QHandJoob application.
+
 Arno Renevier <arno@renevier.net>
         * Weather module maintainer.
 
@@ -77,17 +101,38 @@ Johann Broudin <johann.broudin@6-8.fr>
 Cedric Defortis <cedric@aiur.fr>
         * MeteoFrance module maintainer.
 
+François D. <franek@chicour.net>
+        * ArretsurImages module maintainer.
+
+Gabriel Serme <gabriel@serme.net>
+        * Support of two-factor authentication for Boursorama.
+
 Erwan Jahier <Erwan.Jahier@imag.fr>
         * Patches on BP.
 
 theo <theocrite@theocrite.org>
         * Ergonomics enhancements.
 
+Willy Villard <wvillard@yahoo.fr>
+        * Patches on modules.
+
+Alexandre Flament <alex@al-f.net>
+        * Script contrib/downloadboob.
+
 BohwaZ <bohwaz@bohwaz.net>
-        * Script contrib/report_accounts.sh
+        * Script contrib/report_accounts.sh.
+
+Grmbl Frechneu <gloupagloups@hotmail.fr>
+        * Anonymizer script.
+
+Jérôme Poisson <goffi@goffi.org>
+        * Patches on webcontentedit.
 
 Laurent Dufréchou <laurent.dufrechou@gmail.com>
         * Windows support.
+
+Fabien Grumelard <fabix-symlink@grumi.net>
+        * Fixes in FranceTelevision.
 
 leto <leto@weboob.org>
         * AuM anti-spam updates.
@@ -98,8 +143,17 @@ Vincent Paredes <vincentparedes@gmail.com>
 Richard Genoud <richard.genoud@gmail.com>
         * Fixes on CrArg.
 
+Jean-Christophe Dubacq <jcdubacq1@free.fr>
+        * Fix on FreeMobile.
+
+Lucas Nussbaum <lucas@lucas-nussbaum.net>
+        * Fix on Credit Mutuel.
+
 Camille Baldock <camille.baldock@student.ecp.fr>
         * Fixes on BP.
+
+Alexandre Franke <alexandre.franke@gmail.com>
+        * Contribution to boobank.
 
 Olivier Schwander <olivier.schwander@ens-lyon.org>
         * Fix XDG support.
@@ -107,8 +161,20 @@ Olivier Schwander <olivier.schwander@ens-lyon.org>
 Luc Didry <luc@didry.org>
         * Fixes on LCL.
 
+Stefano Zacchiroli <zack@upsilon.cc>
+        * Patch on the build system.
+
+Adrien Kunysz <adrien@kunysz.be>
+        * Fixes on setup.py.
+
 Michael Scherer <misc@zarb.org>
         * Contribution on weboob-config.
+
+Damien Cassou <damien.cassou@gmail.com>
+        * Minor fixes on housing modules.
+
+ianux <ianux@free.fr>
+        * Patches on videoob.
 
 Laurent George <setog3@gmail.com>
         * Fixes on AuM.
@@ -123,7 +189,10 @@ Antoine <antoine.underlinux@orange.fr>
         * QVideoob fixes.
 
 David Jeanneteau <david.jeanneteau@gmail.com>
-        * Fix on ING an icon of ING
+        * Fix on ING and icon of ING
+
+Juliette Stehlé <juliette.stehle@gmail.com>
+        * Enable LDD and PEL accounts on Boursorama
 
 Discover how to contribute to this great software:
 http://weboob.org/How_to_contribute

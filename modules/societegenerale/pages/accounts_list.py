@@ -18,18 +18,22 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
+import datetime
 from urlparse import parse_qs, urlparse
 from lxml.etree import XML
 from cStringIO import StringIO
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import re
 
+from weboob.capabilities.base import empty, NotAvailable
 from weboob.capabilities.bank import Account
 from weboob.tools.capabilities.bank.transactions import FrenchTransaction
-from weboob.tools.browser import BasePage, BrokenPageError
+from weboob.tools.browser import BrokenPageError
+
+from .base import BasePage
 
 
-__all__ = ['AccountsList', 'AccountHistory']
+__all__ = ['AccountsList', 'CardsList', 'AccountHistory']
 
 
 class AccountsList(BasePage):
@@ -39,43 +43,81 @@ class AccountsList(BasePage):
         pass
 
     def get_list(self):
+        accounts = []
         for tr in self.document.getiterator('tr'):
-            if 'LGNTableRow' in tr.attrib.get('class', '').split():
-                account = Account()
-                for td in tr.getiterator('td'):
-                    if td.attrib.get('headers', '') == 'TypeCompte':
-                        a = td.find('a')
-                        account.label = unicode(a.find("span").text)
-                        account._link_id = a.get('href', '')
+            if not 'LGNTableRow' in tr.attrib.get('class', '').split():
+                continue
 
-                    elif td.attrib.get('headers', '') == 'NumeroCompte':
-                        id = td.text
-                        id = id.replace(u'\xa0','')
-                        account.id = id
+            account = Account()
+            for td in tr.getiterator('td'):
+                if td.attrib.get('headers', '') == 'TypeCompte':
+                    a = td.find('a')
+                    if a is None:
+                        break
+                    account.label = unicode(a.find("span").text)
+                    account._link_id = a.get('href', '')
 
-                    elif td.attrib.get('headers', '') == 'Libelle':
-                        pass
+                elif td.attrib.get('headers', '') == 'NumeroCompte':
+                    id = td.text
+                    id = id.replace(u'\xa0','')
+                    account.id = id
 
-                    elif td.attrib.get('headers', '') == 'Solde':
-                        balance = td.find('div').text
-                        if balance != None:
-                            balance = balance.replace(u'\xa0','').replace(',','.')
-                            account.balance = Decimal(balance)
+                elif td.attrib.get('headers', '') == 'Libelle':
+                    pass
+
+                elif td.attrib.get('headers', '') == 'Solde':
+                    div = td.xpath('./div[@class="Solde"]')
+                    if len(div) > 0:
+                        balance = self.parser.tocleanstring(div[0])
+                        if len(balance) > 0 and balance not in ('ANNULEE', 'OPPOSITION'):
+                            try:
+                                account.balance = Decimal(FrenchTransaction.clean_amount(balance))
+                            except InvalidOperation:
+                                raise BrokenPageError('Unable to parse balance %r' % balance)
+                            account.currency = account.get_currency(balance)
                         else:
-                            account.balance = Decimal(0)
+                            account.balance = NotAvailable
 
-                if 'CARTE_CB' in account._link_id:
-                    continue
+            if not account.label or empty(account.balance):
+                continue
 
-                yield account
+            if 'CARTE_' in account._link_id:
+                ac = accounts[0]
+                ac._card_links.append(account._link_id)
+                if not ac.coming:
+                    ac.coming = Decimal('0.0')
+                ac.coming += account.balance
+            else:
+                account._card_links = []
+                accounts.append(account)
+        return iter(accounts)
+
+
+class CardsList(BasePage):
+    def iter_cards(self):
+        for tr in self.document.getiterator('tr'):
+            tds = tr.findall('td')
+            if len(tds) < 4 or tds[0].attrib.get('class', '') != 'tableauIFrameEcriture1':
+                continue
+
+            yield tr.xpath('.//a')[0].attrib['href']
+
 
 class Transaction(FrenchTransaction):
-    PATTERNS = [(re.compile(r'^CARTE \w+ RETRAIT DAB.* (?P<dd>\d{2})/(?P<mm>\d{2}) (?P<HH>\d+)H(?P<MM>\d+) (?P<text>.*)'),
+    PATTERNS = [(re.compile(r'^CARTE \w+ RETRAIT DAB.* (?P<dd>\d{2})/(?P<mm>\d{2})( (?P<HH>\d+)H(?P<MM>\d+))? (?P<text>.*)'),
                                                             FrenchTransaction.TYPE_WITHDRAWAL),
+                (re.compile(r'^CARTE \w+ (?P<dd>\d{2})/(?P<mm>\d{2})( A (?P<HH>\d+)H(?P<MM>\d+))? RETRAIT DAB (?P<text>.*)'),
+                                                            FrenchTransaction.TYPE_WITHDRAWAL),
+                (re.compile(r'^CARTE \w+ REMBT (?P<dd>\d{2})/(?P<mm>\d{2})( A (?P<HH>\d+)H(?P<MM>\d+))? (?P<text>.*)'),
+                                                            FrenchTransaction.TYPE_PAYBACK),
                 (re.compile(r'^(?P<category>CARTE) \w+ (?P<dd>\d{2})/(?P<mm>\d{2}) (?P<text>.*)'),
+                                                            FrenchTransaction.TYPE_CARD),
+                (re.compile(r'^(?P<dd>\d{2})(?P<mm>\d{2})/(?P<text>.*?)/?(-[\d,]+)?$'),
                                                             FrenchTransaction.TYPE_CARD),
                 (re.compile(r'^(?P<category>(COTISATION|PRELEVEMENT|TELEREGLEMENT|TIP)) (?P<text>.*)'),
                                                             FrenchTransaction.TYPE_ORDER),
+                (re.compile(r'^(\d+ )?VIR (PERM )?POUR: (.*?) (REF: \d+ )?MOTIF: (?P<text>.*)'),
+                                                            FrenchTransaction.TYPE_TRANSFER),
                 (re.compile(r'^(?P<category>VIR(EMEN)?T? \w+) (?P<text>.*)'),
                                                             FrenchTransaction.TYPE_TRANSFER),
                 (re.compile(r'^(CHEQUE) (?P<text>.*)'),     FrenchTransaction.TYPE_CHECK),
@@ -84,7 +126,10 @@ class Transaction(FrenchTransaction):
                                                             FrenchTransaction.TYPE_LOAN_PAYMENT),
                 (re.compile(r'^(?P<category>REMISE CHEQUES)(?P<text>.*)'),
                                                             FrenchTransaction.TYPE_DEPOSIT),
+                (re.compile(r'^CARTE RETRAIT (?P<text>.*)'),
+                                                            FrenchTransaction.TYPE_WITHDRAWAL),
                ]
+
 
 class AccountHistory(BasePage):
     def get_part_url(self):
@@ -98,13 +143,13 @@ class AccountHistory(BasePage):
 
         return None
 
-    def iter_transactions(self):
+    def iter_transactions(self, coming):
         url = self.get_part_url()
         if url is None:
             # There are no transactions in this kind of account
             return
 
-        while 1:
+        while True:
             d = XML(self.browser.readurl(url))
             try:
                 el = self.parser.select(d, '//dataBody', 1, 'xpath')
@@ -115,7 +160,9 @@ class AccountHistory(BasePage):
             s = StringIO(unicode(el.text).encode('iso-8859-1'))
             doc = self.browser.get_document(s)
 
-            for tr in self._iter_transactions(doc):
+            for tr in self._iter_transactions(doc, coming):
+                if not tr._coming:
+                    coming = False
                 yield tr
 
             el = d.xpath('//dataHeader')[0]
@@ -128,16 +175,38 @@ class AccountHistory(BasePage):
                                                   operationNumberPG=el.find('operationNumber').text,
                                                   operationTypePG=el.find('operationType').text,
                                                   pageNumberPG=el.find('pageNumber').text,
-                                                  idecrit=el.find('idecrit').text,
+                                                  idecrit=el.find('idecrit').text or '',
                                                   sign=p['sign'][0],
                                                   src=p['src'][0])
 
-
-    def _iter_transactions(self, doc):
+    def _iter_transactions(self, doc, coming):
+        t = None
         for i, tr in enumerate(self.parser.select(doc.getroot(), 'tr')):
+            try:
+                raw = tr.attrib['title'].strip()
+            except KeyError:
+                raw = tr.xpath('./td[@headers="Libelle"]//text()')[0].strip()
+
+            date = tr.xpath('./td[@headers="Date"]')[0].text.strip()
+            if date == '':
+                m = re.search('(\d+)/(\d+)', raw)
+                if not m:
+                    continue
+                date = t.date if t else datetime.date.today()
+                date = date.replace(day=int(m.group(1)), month=int(m.group(2)))
+                if date <= datetime.date.today():
+                    coming = False
+                continue
+
             t = Transaction(i)
-            t.parse(date=tr.xpath('./td[@headers="Date"]')[0].text,
-                    raw=tr.attrib['title'].strip())
+            t.parse(date=date, raw=raw)
             t.set_amount(*reversed([el.text for el in tr.xpath('./td[@class="right"]')]))
-            t._coming = tr.xpath('./td[@headers="AVenir"]')[0].find('img') is not None
+            try:
+                t._coming = tr.xpath('./td[@headers="AVenir"]')[0].find('img') is not None
+            except IndexError:
+                t._coming = coming
+
+            if t.label.startswith('DEBIT MENSUEL CARTE'):
+                continue
+
             yield t

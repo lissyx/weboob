@@ -28,7 +28,7 @@ __all__ = ['Boobooks']
 class RentedListFormatter(PrettyFormatter):
     MANDATORY_FIELDS = ('id', 'date', 'author', 'name', 'late')
 
-    RED   = '[1;31m'
+    RED = '[1;31m'
 
     def get_title(self, obj):
         s = u'%s — %s (%s)' % (obj.author, obj.name, obj.date)
@@ -36,13 +36,15 @@ class RentedListFormatter(PrettyFormatter):
             s += u' %sLATE!%s' % (self.RED, self.NC)
         return s
 
+
 class Boobooks(ReplApplication):
     APPNAME = 'boobooks'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2012 Jeremy Monnet'
     CAPS = ICapBook
     DESCRIPTION = "Console application allowing to list your books rented or booked at the library, " \
                   "book and search new ones, get your booking history (if available)."
+    SHORT_DESCRIPTION = "manage rented books"
     EXTRA_FORMATTERS = {'rented_list':   RentedListFormatter,
                         }
     DEFAULT_FORMATTER = 'table'
@@ -67,4 +69,3 @@ class Boobooks(ReplApplication):
 
         for backend, renew in self.do('renew_book', id, backends=names):
             self.format(renew)
-        self.flush()

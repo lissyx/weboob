@@ -23,10 +23,11 @@ from weboob.tools.capabilities.messages.GenericBackend import GenericNewspaperBa
 from .browser import NewspaperInrocksBrowser
 from .tools import rssid
 
+
 class NewspaperInrocksBackend(GenericNewspaperBackend, ICapMessages):
-    MAINTAINER = 'Julien Hebert'
+    MAINTAINER = u'Julien Hebert'
     EMAIL = 'juke@free.fr'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     STORAGE = {'seen': {}}
     NAME = 'inrocks'

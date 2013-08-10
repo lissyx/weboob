@@ -3,6 +3,12 @@
 # stop on failure
 set -e
 
+# Use C local to avoid local dates in headers
+export LANG=en_US.utf8
+
+# disable termcolor
+export ANSI_COLORS_DISABLED=1
+
 [ -z "${TMPDIR}" ] && TMPDIR="/tmp"
 
 # do not allow undefined variables anymore

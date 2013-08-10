@@ -25,22 +25,42 @@ from weboob.core import CallErrors
 from weboob.tools.application.repl import ReplApplication
 from weboob.applications.boobmsg import Boobmsg
 from weboob.capabilities.dating import ICapDating, OptimizationNotFound
+from weboob.tools.application.formatters.iformatter import PrettyFormatter
 
 
 __all__ = ['HaveDate']
 
 
+class EventListFormatter(PrettyFormatter):
+    MANDATORY_FIELDS = ('date', 'type')
+
+    def get_title(self, event):
+        s = u'(%s) %s' % (event.date, event.type)
+        if hasattr(event, 'contact') and event.contact:
+            s += u' — %s (%s)' % (event.contact.name, event.contact.id)
+
+        return s
+
+    def get_description(self, event):
+        if hasattr(event, 'message'):
+            return event.message
+
+
 class HaveDate(Boobmsg):
     APPNAME = 'havedate'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2012 Romain Bignon'
-    DESCRIPTION = 'Console application allowing to interact with various dating websites ' \
-                  'and to optimize seduction algorithmically.'
+    DESCRIPTION = "Console application allowing to interact with various dating websites " \
+                  "and to optimize seduction algorithmically."
+    SHORT_DESCRIPTION = "interact with dating websites"
     STORAGE_FILENAME = 'dating.storage'
     STORAGE = {'optims': {}}
     CAPS = ICapDating
+    EXTRA_FORMATTERS = copy(Boobmsg.EXTRA_FORMATTERS)
+    EXTRA_FORMATTERS['events'] = EventListFormatter
     COMMANDS_FORMATTERS = copy(Boobmsg.COMMANDS_FORMATTERS)
     COMMANDS_FORMATTERS['optim'] = 'table'
+    COMMANDS_FORMATTERS['events'] = 'events'
 
     def load_default_backends(self):
         self.load_backends(ICapDating, storage=self.create_storage(self.STORAGE_FILENAME))
@@ -50,7 +70,7 @@ class HaveDate(Boobmsg):
 
         try:
             self.do('init_optimizations').wait()
-        except CallErrors, e:
+        except CallErrors as e:
             self.bcall_errors_handler(e)
 
         optimizations = self.storage.get('optims')
@@ -137,7 +157,7 @@ class HaveDate(Boobmsg):
                                 except KeyError:
                                     pass
                 sys.stdout.write('.\n')
-            except CallErrors, errors:
+            except CallErrors as errors:
                 for backend, error, backtrace in errors:
                     if isinstance(error, OptimizationNotFound):
                         self.logger.error(u'Error(%s): Optimization "%s" not found' % (backend.name, optim_name))
@@ -225,7 +245,17 @@ class HaveDate(Boobmsg):
                         status = ''
                     line.append((b, status))
                 self.format(tuple(line))
-            self.flush()
             return
         print >>sys.stderr, "No such command '%s'" % cmd
         return 1
+
+    def do_events(self, line):
+        """
+        events
+
+        Display dating events.
+        """
+        self.change_path([u'events'])
+        self.start_format()
+        for backend, event in self.do('iter_events'):
+            self.cached_format(event)

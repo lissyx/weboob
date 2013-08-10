@@ -33,7 +33,6 @@ __all__ = ['VideoPage']
 
 
 class VideoPage(BasePage):
-
     def get_video(self, video=None):
         _id = to_unicode(self.group_dict['id'])
         if video is None:
@@ -43,7 +42,7 @@ class VideoPage(BasePage):
 
         # youjizz HTML is crap, we must parse it with regexps
         data = lxml.html.tostring(self.document.getroot())
-        m = re.search(r'<strong>.*?Runtime.*?</strong> (.+?)<br.*>', data)
+        m = re.search(r'<strong>.*?Runtime.*?</strong> (.+?)</div>', data)
         if m:
             txt = m.group(1).strip()
             if txt == 'Unknown':
@@ -54,12 +53,15 @@ class VideoPage(BasePage):
         else:
             raise BrokenPageError('Unable to retrieve video duration')
 
+        real_id = int(_id.split('-')[-1])
+        data = self.browser.readurl('http://www.youjizz.com/videos/embed/%s' % real_id)
+
         video_file_urls = re.findall(r'"(http://[^",]+\.youjizz\.com[^",]+\.flv(?:\?[^"]*)?)"', data)
         if len(video_file_urls) == 0:
             raise BrokenPageError('Video URL not found')
         elif len(video_file_urls) > 1:
             raise BrokenPageError('Many video file URL found')
         else:
-            video.url = video_file_urls[0]
+            video.url = to_unicode(video_file_urls[0])
 
         return video

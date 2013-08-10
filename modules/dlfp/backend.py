@@ -18,12 +18,13 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 from datetime import datetime, timedelta
 import time
 
 from weboob.tools.backend import BaseBackend, BackendConfig
+from weboob.tools.browser import BrowserForbidden
 from weboob.tools.newsfeed import Newsfeed
 from weboob.tools.value import Value, ValueBool, ValueBackendPassword
 from weboob.capabilities.messages import ICapMessages, ICapMessagesPost, Message, Thread, CantSendMessage
@@ -38,13 +39,13 @@ __all__ = ['DLFPBackend']
 
 class DLFPBackend(BaseBackend, ICapMessages, ICapMessagesPost, ICapContent):
     NAME = 'dlfp'
-    MAINTAINER = 'Romain Bignon'
+    MAINTAINER = u'Romain Bignon'
     EMAIL = 'romain@weboob.org'
-    VERSION = '0.d'
+    VERSION = '0.h'
     LICENSE = 'AGPLv3+'
     DESCRIPTION = "Da Linux French Page news website"
-    CONFIG = BackendConfig(Value('username',                label='Username', regexp='.+'),
-                           ValueBackendPassword('password', label='Password'),
+    CONFIG = BackendConfig(Value('username',                label='Username', default=''),
+                           ValueBackendPassword('password', label='Password', default=''),
                            ValueBool('get_news',            label='Get newspapers', default=True),
                            ValueBool('get_diaries',         label='Get diaries', default=False),
                            ValueBool('get_polls',           label='Get polls', default=False),
@@ -63,7 +64,12 @@ class DLFPBackend(BaseBackend, ICapMessages, ICapMessagesPost, ICapContent):
             }
 
     def create_default_browser(self):
-        return self.create_browser(self.config['username'].get(), self.config['password'].get())
+        username = self.config['username'].get()
+        if username:
+            password = self.config['password'].get()
+        else:
+            password = None
+        return self.create_browser(username, password)
 
     def deinit(self):
         # don't need to logout if the browser hasn't been used.
@@ -99,15 +105,9 @@ class DLFPBackend(BaseBackend, ICapMessages, ICapMessagesPost, ICapContent):
             thread = id
             id = thread.id
 
-            # Check if we have seen all comments of this thread.
-            oldhash = self.storage.get('hash', id, default="")
-            newhash = self.browser.get_hash(thread._rsscomment)
-            if not getseen and oldhash == newhash:
-                return None
-            self.storage.set('hash', id, newhash)
             if thread.date:
                 self.storage.set('date', id, thread.date)
-            self.storage.save()
+                self.storage.save()
 
         with self.browser:
             content = self.browser.get_content(id)
@@ -161,7 +161,7 @@ class DLFPBackend(BaseBackend, ICapMessages, ICapMessagesPost, ICapContent):
                               date=com.date,
                               parent=parent,
                               content=com.body,
-                              signature=com.signature + \
+                              signature=com.signature +
                                         '<br />'.join(['Score: %d' % com.score,
                                                        'URL: %s' % com.url]),
                               children=[],
@@ -177,10 +177,18 @@ class DLFPBackend(BaseBackend, ICapMessages, ICapMessagesPost, ICapContent):
 
     def iter_unread_messages(self):
         for thread in self.iter_threads():
-            self.fill_thread(thread, 'root', False)
-            for m in thread.iter_all_messages():
-                if m.flags & m.IS_UNREAD:
-                    yield m
+            # Check if we have seen all comments of this thread.
+            with self.browser:
+                oldhash = self.storage.get('hash', thread.id, default="")
+                newhash = self.browser.get_hash(thread._rsscomment)
+            if oldhash != newhash:
+                self.storage.set('hash', thread.id, newhash)
+                self.storage.save()
+
+                self.fill_thread(thread, 'root', getseen=False)
+                for m in thread.iter_all_messages():
+                    if m.flags & m.IS_UNREAD:
+                        yield m
 
     def set_message_read(self, message):
         self.storage.set('seen', message.thread.id, 'comments',
@@ -215,6 +223,8 @@ class DLFPBackend(BaseBackend, ICapMessages, ICapMessagesPost, ICapContent):
 
     #### ICapMessagesReply #########################################
     def post_message(self, message):
+        if not self.browser.username:
+            raise BrowserForbidden()
         if not message.parent:
             raise CantSendMessage('Posting news and diaries on DLFP is not supported yet')
 
@@ -227,15 +237,17 @@ class DLFPBackend(BaseBackend, ICapMessages, ICapMessagesPost, ICapContent):
                                              message.content)
 
     #### ICapContent ###############################################
-    def get_content(self, id):
-        if isinstance(id, basestring):
-            content = Content(id)
+    def get_content(self, _id, revision=None):
+        if isinstance(_id, basestring):
+            content = Content(_id)
         else:
-            content = id
-            id = content.id
+            content = _id
+            _id = content.id
 
+        if revision:
+            raise NotImplementedError('Website does not provide access to older revisions sources.')
         with self.browser:
-            data = self.browser.get_wiki_content(id)
+            data = self.browser.get_wiki_content(_id)
 
         if data is None:
             return None
@@ -244,6 +256,8 @@ class DLFPBackend(BaseBackend, ICapMessages, ICapMessagesPost, ICapContent):
         return content
 
     def push_content(self, content, message=None, minor=False):
+        if not self.browser.username:
+            raise BrowserForbidden()
         with self.browser:
             return self.browser.set_wiki_content(content.id, content.content, message)
 

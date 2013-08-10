@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from __future__ import with_statement
+
 
 import sys
 
@@ -77,9 +77,10 @@ class PricesFormatter(PrettyFormatter):
 
 class Comparoob(ReplApplication):
     APPNAME = 'comparoob'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2012 Romain Bignon'
-    DESCRIPTION = 'Console application to compare products.'
+    DESCRIPTION = "Console application to compare products."
+    SHORT_DESCRIPTION = "compare products"
     DEFAULT_FORMATTER = 'table'
     EXTRA_FORMATTERS = {'prices':       PricesFormatter,
                         'price':        PriceFormatter,
@@ -90,9 +91,21 @@ class Comparoob(ReplApplication):
     CAPS = ICapPriceComparison
 
     def do_prices(self, pattern):
+        """
+        prices [PATTERN]
+
+        Display prices for a product. If a pattern is supplied, do not prompt
+        what product to compare.
+        """
         products = []
         for backend, product in self.do('search_products', pattern):
-            products.append(product)
+            double = False
+            for prod in products:
+                if product.name == prod.name:
+                    double = True
+                    break
+            if not double:
+                products.append(product)
 
         product = None
         if len(products) == 0:
@@ -113,9 +126,14 @@ class Comparoob(ReplApplication):
 
         self.change_path([u'prices'])
         self.start_format()
+        products = []
         for backend, price in self.do('iter_prices', product):
+            products.append(price)
+        for price in sorted(products, key=self._get_price):
             self.cached_format(price)
-        self.flush()
+
+    def _get_price(self, price):
+        return price.cost
 
     def complete_info(self, text, line, *ignored):
         args = line.split(' ')
@@ -123,15 +141,19 @@ class Comparoob(ReplApplication):
             return self._complete_object()
 
     def do_info(self, _id):
+        """
+        info ID
+
+        Get information about a product.
+        """
         if not _id:
             print >>sys.stderr, 'This command takes an argument: %s' % self.get_command_help('info', short=True)
             return 2
 
         price = self.get_object(_id, 'get_price')
         if not price:
-            print >>sys.stderr, 'Price not found: %s' %  _id
+            print >>sys.stderr, 'Price not found: %s' % _id
             return 3
 
         self.start_format()
         self.format(price)
-        self.flush()

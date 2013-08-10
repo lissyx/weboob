@@ -41,6 +41,7 @@ from weboob.tools.misc import html2text, get_backtrace, utc2local, to_unicode
 
 __all__ = ['Monboob']
 
+
 class FakeSMTPD(SMTPServer):
     def __init__(self, app, bindaddr, port):
         SMTPServer.__init__(self, (bindaddr, port), None)
@@ -49,6 +50,7 @@ class FakeSMTPD(SMTPServer):
     def process_message(self, peer, mailfrom, rcpttos, data):
         msg = message_from_string(data)
         self.app.process_incoming_mail(msg)
+
 
 class MonboobScheduler(Scheduler):
     def __init__(self, app):
@@ -64,14 +66,14 @@ class MonboobScheduler(Scheduler):
                 port = self.app.options.smtpd
             try:
                 FakeSMTPD(self.app, host, int(port))
-            except socket.error, e:
+            except socket.error as e:
                 self.logger.error('Unable to start the SMTP daemon: %s' % e)
                 return False
 
         # XXX Fuck, we shouldn't copy this piece of code from
         # weboob.scheduler.Scheduler.run().
         try:
-            while 1:
+            while True:
                 self.stop_event.wait(0.1)
                 if self.app.options.smtpd:
                     asyncore.loop(timeout=0.1, count=1)
@@ -85,10 +87,11 @@ class MonboobScheduler(Scheduler):
 
 class Monboob(ReplApplication):
     APPNAME = 'monboob'
-    VERSION = '0.d'
+    VERSION = '0.h'
     COPYRIGHT = 'Copyright(C) 2010-2011 Romain Bignon'
     DESCRIPTION = 'Daemon allowing to regularly check for new messages on various websites, ' \
                   'and send an email for each message, and post a reply to a message on a website.'
+    SHORT_DESCRIPTION = "daemon to send and check messages"
     CONFIG = {'interval':  300,
               'domain':    'weboob.example.org',
               'recipient': 'weboob@example.org',
@@ -119,7 +122,7 @@ class Monboob(ReplApplication):
 
         try:
             self.config.set('html', int(self.config.get('html')))
-            if self.config.get('html') not in (0,1):
+            if self.config.get('html') not in (0, 1):
                 raise ValueError()
         except ValueError:
             print >>sys.stderr, 'Configuration error: html must be 0 or 1.'
@@ -175,10 +178,10 @@ class Monboob(ReplApplication):
                             content += unicode(s, charset)
                         else:
                             content += unicode(s)
-                    except UnicodeError, e:
+                    except UnicodeError as e:
                         self.logger.warning('Unicode error: %s' % e)
                         continue
-                    except Exception, e:
+                    except Exception as e:
                         self.logger.exception(e)
                         continue
                     else:
@@ -232,7 +235,7 @@ class Monboob(ReplApplication):
                           content=content)
         try:
             backend.post_message(message)
-        except Exception, e:
+        except Exception as e:
             content = u'Unable to send message to %s:\n' % thread_id
             content += u'\n\t%s\n' % to_unicode(e)
             if logging.root.level == logging.DEBUG:
@@ -266,7 +269,7 @@ class Monboob(ReplApplication):
             for backend, message in self.weboob.do('iter_unread_messages'):
                 if self.send_email(backend, message):
                     backend.set_message_read(message)
-        except CallErrors, e:
+        except CallErrors as e:
             self.bcall_errors_handler(e)
 
     def send_email(self, backend, mail):
@@ -360,7 +363,7 @@ class Monboob(ReplApplication):
             try:
                 smtp = SMTP(self.config.get('smtp'))
                 smtp.sendmail(sender, recipient, msg.as_string())
-            except Exception, e:
+            except Exception as e:
                 self.logger.error('Unable to deliver mail: %s' % e)
                 return False
             else:

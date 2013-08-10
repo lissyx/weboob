@@ -18,7 +18,7 @@
 # along with weboob. If not, see <http://www.gnu.org/licenses/>.
 
 
-from weboob.tools.browser import BaseBrowser
+from weboob.tools.browser import BaseBrowser, BrowserHTTPNotFound
 
 from .pages.torrents import TorrentsPage, TorrentPage
 
@@ -32,12 +32,9 @@ class IsohuntBrowser(BaseBrowser):
     ENCODING = 'utf-8'
     USER_AGENT = BaseBrowser.USER_AGENTS['wget']
     PAGES = {
-        'https://isohunt.com/torrents/.*iht=-1&ihp=1&ihs1=1&iho1=d' : TorrentsPage,
-        'https://isohunt.com/torrent_details.*tab=summary' : TorrentPage,
-        }
-
-    def home(self):
-        return self.location('https://isohunt.com')
+        'https://isohunt.com/torrents/.*iht=-1&ihp=1&ihs1=1&iho1=d': TorrentsPage,
+        'https://isohunt.com/torrent_details.*tab=summary': TorrentPage,
+    }
 
     def iter_torrents(self, pattern):
         self.location('https://isohunt.com/torrents/%s?iht=-1&ihp=1&ihs1=1&iho1=d' % pattern.encode('utf-8'))
@@ -45,6 +42,9 @@ class IsohuntBrowser(BaseBrowser):
         return self.page.iter_torrents()
 
     def get_torrent(self, id):
-        self.location('https://isohunt.com/torrent_details/%s/?tab=summary' % id)
-        assert self.is_on_page(TorrentPage)
-        return self.page.get_torrent(id)
+        try:
+            self.location('https://isohunt.com/torrent_details/%s/?tab=summary' % id)
+        except BrowserHTTPNotFound:
+            return
+        if self.is_on_page(TorrentPage):
+            return self.page.get_torrent(id)
